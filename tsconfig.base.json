@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "@fiao/contracts": ["packages/contracts/src/index.ts"],
+      "@fiao/contracts/*": ["packages/contracts/src/*"],
+      "@fiao/domain": ["packages/domain/src/index.ts"],
+      "@fiao/domain/*": ["packages/domain/src/*"],
+      "@fiao/database": ["packages/database/src/index.ts"],
+      "@fiao/database/*": ["packages/database/src/*"],
+      "@fiao/sync": ["packages/sync/src/index.ts"],
+      "@fiao/sync/*": ["packages/sync/src/*"],
+      "@fiao/testkit": ["packages/testkit/src/index.ts"],
+      "@fiao/testkit/*": ["packages/testkit/src/*"]
+    }
+  }
+}

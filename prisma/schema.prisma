@@ -1,0 +1,231 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../packages/database/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  OWNER
+  CASHIER
+}
+
+enum AuditSource {
+  UI
+  API
+  OFFLINE_SYNC
+}
+
+enum OperationStatus {
+  ACCEPTED
+  ACCEPTED_WITH_CONFLICT
+  REJECTED
+}
+
+enum SyncConflictStatus {
+  OPEN
+  RESOLVED
+}
+
+model OwnerAccount {
+  id                  String               @id @default(uuid()) @db.Uuid
+  name                String
+  active              Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  branches            Branch[]
+  users               User[]
+  devices             Device[]
+  sessions            Session[]
+  ownerAuthorizations OwnerAuthorization[]
+  auditEvents         AuditEvent[]
+  clientOperations    ClientOperation[]
+  syncChanges         SyncChange[]
+  syncConflicts       SyncConflict[]
+}
+
+model Branch {
+  id                  String               @id @default(uuid()) @db.Uuid
+  ownerId             String               @db.Uuid
+  name                String
+  address             String?
+  timezone            String               @default("America/Santo_Domingo")
+  active              Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  owner               OwnerAccount         @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  userAssignments     UserBranch[]
+  ownerAuthorizations OwnerAuthorization[]
+  auditEvents         AuditEvent[]
+  clientOperations    ClientOperation[]
+  syncChanges         SyncChange[]
+  syncConflicts       SyncConflict[]
+
+  @@index([ownerId, active])
+}
+
+model User {
+  id                   String               @id @default(uuid()) @db.Uuid
+  ownerId              String               @db.Uuid
+  name                 String
+  phoneE164            String               @unique @db.VarChar(16)
+  pinHash              String               @db.VarChar(255)
+  role                 Role
+  active               Boolean              @default(true)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  owner                OwnerAccount         @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branchAssignments    UserBranch[]
+  devices              Device[]
+  sessions             Session[]
+  authorizationsIssued OwnerAuthorization[] @relation("OwnerAuthorizationAuthorizer")
+  auditEvents          AuditEvent[]         @relation("AuditActor")
+  clientOperations     ClientOperation[]    @relation("OperationActor")
+
+  @@index([ownerId, role, active])
+}
+
+model UserBranch {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  branchId  String   @db.Uuid
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, branchId])
+  @@index([branchId])
+}
+
+model Device {
+  id               String            @id @default(uuid()) @db.Uuid
+  ownerId          String            @db.Uuid
+  userId           String            @db.Uuid
+  label            String
+  active           Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  lastSeenAt       DateTime          @default(now())
+  owner            OwnerAccount      @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  user             User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  sessions         Session[]
+  auditEvents      AuditEvent[]
+  clientOperations ClientOperation[]
+
+  @@index([ownerId, userId, active])
+}
+
+model Session {
+  id        String       @id @default(uuid()) @db.Uuid
+  ownerId   String       @db.Uuid
+  userId    String       @db.Uuid
+  deviceId  String       @db.Uuid
+  tokenHash String       @unique @db.VarChar(64)
+  createdAt DateTime     @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+  owner     OwnerAccount @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  user      User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  device    Device       @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+
+  @@index([userId, expiresAt])
+  @@index([ownerId, revokedAt])
+}
+
+model OwnerAuthorization {
+  id                String       @id @default(uuid()) @db.Uuid
+  ownerId           String       @db.Uuid
+  branchId          String       @db.Uuid
+  authorizerUserId  String       @db.Uuid
+  purpose           String
+  targetOperationId String       @db.Uuid
+  issuedAt          DateTime     @default(now())
+  expiresAt         DateTime
+  owner             OwnerAccount @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch            Branch       @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  authorizer        User         @relation("OwnerAuthorizationAuthorizer", fields: [authorizerUserId], references: [id], onDelete: Restrict)
+
+  @@index([ownerId, branchId, expiresAt])
+  @@index([targetOperationId])
+}
+
+/// Append-only by application policy. Corrections create new events; existing rows are never rewritten by domain flows.
+model AuditEvent {
+  id                String       @id @default(uuid()) @db.Uuid
+  ownerId           String       @db.Uuid
+  branchId          String?      @db.Uuid
+  actorUserId       String?      @db.Uuid
+  deviceId          String?      @db.Uuid
+  source            AuditSource
+  action            String
+  targetOperationId String?      @db.Uuid
+  payload           Json?
+  createdAt         DateTime     @default(now())
+  owner             OwnerAccount @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch            Branch?      @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  actor             User?        @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  device            Device?      @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+
+  @@index([ownerId, branchId, createdAt])
+  @@index([targetOperationId])
+}
+
+model ClientOperation {
+  id              String          @id @default(uuid()) @db.Uuid
+  ownerId         String          @db.Uuid
+  branchId        String          @db.Uuid
+  operationId     String          @db.Uuid
+  actorUserId     String          @db.Uuid
+  deviceId        String          @db.Uuid
+  type            String
+  occurredAt      DateTime
+  baseCursor      BigInt?
+  payload         Json
+  status          OperationStatus?
+  result          Json?
+  latestCursor    BigInt?
+  createdAt       DateTime        @default(now())
+  owner           OwnerAccount    @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch          Branch          @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  actor           User            @relation("OperationActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  device          Device          @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  syncChanges     SyncChange[]
+  conflicts       SyncConflict[]
+
+  @@unique([ownerId, operationId])
+  @@index([ownerId, branchId, createdAt])
+}
+
+model SyncChange {
+  seq               BigInt           @id @default(autoincrement())
+  ownerId           String           @db.Uuid
+  branchId          String           @db.Uuid
+  clientOperationId String?          @db.Uuid
+  type              String
+  payload           Json
+  createdAt         DateTime         @default(now())
+  owner             OwnerAccount     @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch            Branch           @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  clientOperation   ClientOperation? @relation(fields: [clientOperationId], references: [id], onDelete: Restrict)
+
+  @@index([ownerId, branchId, seq])
+}
+
+model SyncConflict {
+  id                String             @id @default(uuid()) @db.Uuid
+  ownerId           String             @db.Uuid
+  branchId          String             @db.Uuid
+  clientOperationId String             @db.Uuid
+  kind              String
+  status            SyncConflictStatus @default(OPEN)
+  details           Json
+  createdAt         DateTime           @default(now())
+  resolvedAt        DateTime?
+  owner             OwnerAccount       @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch            Branch             @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  clientOperation   ClientOperation    @relation(fields: [clientOperationId], references: [id], onDelete: Restrict)
+
+  @@index([ownerId, branchId, status, createdAt])
+  @@index([clientOperationId])
+}
