@@ -5,7 +5,8 @@ export type {
   CreateOwnerAuthorizationInput,
   CreateSessionInput,
   LoginUserRecord,
-  OwnerAuthorizerRecord
+  OwnerAuthorizerRecord,
+  UserContextRecord
 } from "./repositories/auth-repository";
 
 export { SyncRepository } from "./repositories/sync-repository";

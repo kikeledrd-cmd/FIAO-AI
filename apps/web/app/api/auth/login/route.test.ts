@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import type { LoginUserRecord } from "@fiao/database";
-import { createLoginHandler } from "./route";
+import type { CreateSessionInput, LoginUserRecord } from "@fiao/database";
+import { AttemptThrottle } from "@/lib/auth/attempt-throttle";
+import { createLoginHandler } from "./handler";
 
 function request(body: unknown) {
   return new Request("http://localhost/api/auth/login", {
@@ -25,13 +26,17 @@ function validUser(): LoginUserRecord {
   };
 }
 
+function freshThrottle() {
+  return new AttemptThrottle();
+}
+
 function repository(user: LoginUserRecord | null) {
   return {
     findActiveUserByPhone: vi.fn(async () => user),
     createDevice: vi.fn(async () => ({ id: "44444444-4444-4444-8444-444444444444" })),
-    createSession: vi.fn(async ({ expiresAt }: { expiresAt: Date }) => ({
+    createSession: vi.fn(async (input: CreateSessionInput) => ({
       id: "55555555-5555-4555-8555-555555555555",
-      expiresAt
+      expiresAt: input.expiresAt
     }))
   };
 }
@@ -39,7 +44,7 @@ function repository(user: LoginUserRecord | null) {
 describe("POST /api/auth/login", () => {
   it("rejects an incorrect PIN without revealing whether the phone exists", async () => {
     const repo = repository(validUser());
-    const POST = createLoginHandler({ repository: repo, verifyPinHash: async () => false });
+    const POST = createLoginHandler({ repository: repo, verifyPinHash: async () => false, throttle: freshThrottle() });
     const response = await POST(request({ phone: "+18095550123", pin: "9999", deviceLabel: "Caja" }));
 
     expect(response.status).toBe(401);
@@ -48,7 +53,7 @@ describe("POST /api/auth/login", () => {
   });
 
   it("uses the same credential error when the phone does not exist", async () => {
-    const POST = createLoginHandler({ repository: repository(null), verifyPinHash: async () => false });
+    const POST = createLoginHandler({ repository: repository(null), verifyPinHash: async () => false, throttle: freshThrottle() });
     const response = await POST(request({ phone: "+18095550123", pin: "9999", deviceLabel: "Caja" }));
 
     expect(response.status).toBe(401);
@@ -59,6 +64,7 @@ describe("POST /api/auth/login", () => {
     const POST = createLoginHandler({
       repository: repository(validUser()),
       verifyPinHash: async () => false,
+      throttle: freshThrottle(),
       now: () => 1_000
     });
 
@@ -78,6 +84,7 @@ describe("POST /api/auth/login", () => {
     const POST = createLoginHandler({
       repository: repo,
       verifyPinHash: async () => true,
+      throttle: freshThrottle(),
       randomToken: () => rawToken,
       now: () => Date.UTC(2026, 7, 13, 20, 0, 0)
     });

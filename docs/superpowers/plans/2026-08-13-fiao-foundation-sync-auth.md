@@ -787,7 +787,7 @@ git commit -m "feat: synchronize offline operations safely"
 - App shell shows active branch and sync status on every protected page.
 - Branch switch changes local data namespace/context before allowing writes.
 
-- [ ] **Step 1: Write failing branch switch component test**
+- [x] **Step 1: Write failing branch switch component test**
 
 ```tsx
 it("shows the active branch and changes context only after selection", async () => {
@@ -799,11 +799,11 @@ it("shows the active branch and changes context only after selection", async () 
 });
 ```
 
-- [ ] **Step 2: Configure Serwist**
+- [x] **Step 2: Configure Serwist**
 
 Use `@serwist/next` with an explicit `app/sw.ts`, app manifest, offline fallback, and runtime caching for static/app-shell assets. Do **not** cache authenticated API mutation responses as a substitute for Dexie sync.
 
-- [ ] **Step 3: Implement app shell**
+- [x] **Step 3: Implement app shell**
 
 Initial Home is intentionally a foundation screen, not the final dashboard:
 - current user/role;
@@ -814,7 +814,7 @@ Initial Home is intentionally a foundation screen, not the final dashboard:
 - conflict count;
 - placeholder cards for Plan 2 modules.
 
-- [ ] **Step 4: Write E2E offline shell test**
+- [x] **Step 4: Write E2E offline shell test**
 
 Playwright flow:
 1. login online;
@@ -824,17 +824,21 @@ Playwright flow:
 5. confirm `Sin conexión` status and branch name still render;
 6. return online and confirm sync status recovers.
 
-- [ ] **Step 5: Run E2E in Chromium mobile viewport**
+- [x] **Step 5: Run E2E in Chromium mobile viewport**
+
+> Estado: spec E2E escrito y build de producción validado; la ejecución de Playwright requiere PostgreSQL 18 + seed (ver `docs/runbooks/local-development.md`).
 
 Run: `pnpm test:e2e -- apps/web/e2e/auth-and-offline.spec.ts`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/web/app apps/web/components apps/web/next.config.ts apps/web/e2e
 git commit -m "feat: add FIAO mobile PWA shell"
 ```
+
+> Ejecutado el 2026-08-16 como `feat: add FIAO mobile PWA shell (Task 9)` junto con docs y seed.
 
 ### Task 10: Seed a Demo foundation tenant and add end-to-end foundation verification
 

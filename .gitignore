@@ -8,3 +8,6 @@ playwright-report/
 test-results/
 
 packages/database/generated/
+
+# TypeScript incremental build info
+*.tsbuildinfo

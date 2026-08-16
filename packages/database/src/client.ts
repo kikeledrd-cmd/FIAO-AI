@@ -1,6 +1,9 @@
-import "dotenv/config";
+import { config as loadEnv } from "dotenv";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client";
+
+loadEnv({ path: new URL("../../../.env", import.meta.url) });
+loadEnv();
 
 const DEVELOPMENT_DATABASE_URL = "postgresql://fiao:fiao_dev@localhost:5432/fiao_dev";
 

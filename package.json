@@ -1,6 +1,7 @@
 {
   "name": "fiao",
   "private": true,
+  "type": "module",
   "packageManager": "pnpm@10.34.0",
   "engines": {
     "node": ">=24 <25"
@@ -10,20 +11,35 @@
     "build": "pnpm --filter @fiao/web build",
     "typecheck": "pnpm -r --if-present typecheck",
     "lint": "pnpm --filter @fiao/web lint",
-    "test": "vitest run",
+    "test": "vitest run --project=unit --project=component",
     "test:integration": "vitest run --project integration",
     "test:e2e": "playwright test",
+    "db:seed": "prisma db seed",
     "postinstall": "prisma generate"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",
     "@types/node": "^24.0.0",
     "@vitest/coverage-v8": "^4.0.0",
+    "argon2": "^0.44.0",
     "dotenv": "^17.0.0",
     "prisma": "^7.0.0",
     "tsx": "^4.20.0",
     "typescript": "^5.8.0",
     "vitest": "^4.0.0",
     "@fiao/testkit": "workspace:*"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/engines",
+      "argon2",
+      "esbuild",
+      "prisma",
+      "sharp",
+      "unrs-resolver"
+    ]
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   }
 }

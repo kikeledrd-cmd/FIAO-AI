@@ -4,8 +4,8 @@ import type { CommandContext } from "@fiao/domain/context";
 import { processOperation, SyncRepository } from "@fiao/database";
 import { resetDatabase, testDb } from "@fiao/testkit/db";
 import { TestFactory } from "@fiao/testkit/factories";
-import { createPullHandler } from "./pull/route";
-import { createPushHandler } from "./push/route";
+import { createPullHandler } from "./pull/handler";
+import { createPushHandler } from "./push/handler";
 
 const factory = new TestFactory(testDb);
 

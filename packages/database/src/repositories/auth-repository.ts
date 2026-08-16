@@ -35,6 +35,19 @@ export interface BranchAccess {
   role: Role;
 }
 
+export interface UserContextRecord {
+  user: {
+    id: string;
+    name: string;
+    role: Role;
+  };
+  branches: Array<{
+    id: string;
+    name: string;
+    timezone: string;
+  }>;
+}
+
 export interface ActiveSessionRecord {
   sessionId: string;
   ownerId: string;
@@ -96,6 +109,40 @@ export class AuthRepository {
       owner: {
         id: user.owner.id,
         name: user.owner.name
+      },
+      branches
+    };
+  }
+
+  async findUserContext(userId: string, ownerId: string): Promise<UserContextRecord | null> {
+    const user = await this.db.user.findUnique({
+      where: { id: userId },
+      include: {
+        owner: true,
+        branchAssignments: {
+          include: { branch: true }
+        }
+      }
+    });
+
+    if (!user || !user.active || !user.owner.active || user.ownerId !== ownerId) return null;
+
+    const branches =
+      user.role === "OWNER"
+        ? await this.db.branch.findMany({
+            where: { ownerId: user.ownerId, active: true },
+            orderBy: { createdAt: "asc" },
+            select: { id: true, name: true, timezone: true }
+          })
+        : user.branchAssignments
+            .filter(({ branch }) => branch.active && branch.ownerId === user.ownerId)
+            .map(({ branch }) => ({ id: branch.id, name: branch.name, timezone: branch.timezone }));
+
+    return {
+      user: {
+        id: user.id,
+        name: user.name,
+        role: user.role as Role
       },
       branches
     };

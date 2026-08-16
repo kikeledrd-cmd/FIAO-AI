@@ -57,6 +57,9 @@ export function SyncProvider({
   }, [branchId, refreshLocalStatus, syncRunner]);
 
   useEffect(() => {
+    // Async IndexedDB read (not a synchronous state update in the effect body);
+    // refreshLocalStatus resolves after an await, so the rule's concern does not apply.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshLocalStatus();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const onOnline = () => {

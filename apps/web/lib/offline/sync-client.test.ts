@@ -55,7 +55,7 @@ describe("sync client", () => {
     const op = await pendingOperation();
     const transport: SyncTransport = {
       push: vi.fn(async () => ({
-        results: [{ operationId: op.operationId, status: "ACCEPTED_WITH_CONFLICT", conflictId: "conflict-1", latestCursor: "1" }],
+        results: [{ operationId: op.operationId, status: "ACCEPTED_WITH_CONFLICT" as const, conflictId: "conflict-1", latestCursor: "1" }],
         cursor: "1"
       })),
       pull: vi.fn(async () => ({ changes: [], nextCursor: "0", hasMore: false }))

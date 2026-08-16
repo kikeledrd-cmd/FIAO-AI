@@ -18,13 +18,15 @@ El producto funcional **FIAO MVP V1** está definido y la implementación técni
 - Réplica offline con Dexie/IndexedDB.
 - Cola de operaciones offline owner-scoped.
 - Sync client con conflictos explícitos y cursores seguros.
-- Documentación completa del Blueprint y roadmap de implementación.
+- **PWA shell (Task 9)**: manifest instalable, service worker Serwist, app shell mobile-first con selector de sucursal, estado de red, estado de sync, contador de pendientes/conflictos y home foundation con módulos de Plan 2.
+- Seed demo determinista (dueño + cajero + 2 sucursales).
+- Documentación completa del Blueprint, roadmap, handoff y runbook local.
 
 ### Próxima tarea
 
-**Task 9 — PWA shell + Serwist + selector de sucursal + UX offline.**
+**Task 10 — Seed oficial + verificación E2E completa del flujo foundation.**
 
-El objetivo es que FIAO pueda abrir/navegar con conectividad intermitente sin usar el service worker como sustituto del mecanismo de sync Dexie.
+El seed mínimo ya existe (`prisma/seed.ts`) y el E2E de la PWA (`apps/web/e2e/auth-and-offline.spec.ts`) está escrito; falta ejecutar la verificación E2E completa contra PostgreSQL y Playwright en el entorno objetivo.
 
 ## Documentación obligatoria
 

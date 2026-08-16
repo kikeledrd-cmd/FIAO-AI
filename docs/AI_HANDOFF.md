@@ -1,6 +1,6 @@
 # FIAO AI — AI Handoff
 
-Fecha de corte: **2026-08-13**
+Fecha de corte: **2026-08-15**
 
 ## 1. Objetivo del proyecto
 
@@ -79,18 +79,26 @@ Si código y memoria conversacional difieren, primero revisar estos documentos y
    - no retrocede cursor ante fallos
    - conflictos/rechazos visibles
 
+9. **PWA shell + Serwist + selector de sucursal + UX offline**
+   - manifest instalable (`app/manifest.ts`, nombre FIAO aislado)
+   - service worker Serwist (`app/sw.ts` → `public/sw.js`), precache de shell/assets
+   - `/api/*` SIEMPRE `NetworkOnly` en el SW (offline = Dexie + sync client, nunca cache de respuestas autenticadas)
+   - app shell mobile-first (`components/app-shell.tsx`): sucursal activa, estado de red, sync status, contador de pendientes/conflictos en cada página protegida
+   - selector de sucursal (`components/branch-switcher.tsx`) + `POST /api/auth/branch` con verificación de acceso y cookie `fiao_branch`
+   - home foundation (`features/home/home-screen.tsx`) con usuario/rol, sucursal, red, sync y cards placeholder de Plan 2
+   - `AuthRepository.findUserContext` para sesión → usuario + sucursales
+   - E2E `apps/web/e2e/auth-and-offline.spec.ts` (login → offline shell → reconexión) y `branch-switcher.test.tsx`
+
 ### Siguiente tarea exacta
 
-**Task 9: PWA shell + Serwist + selector de sucursal + UX offline.**
+**Task 10: Seed demo oficial + verificación E2E completa del flujo foundation.**
 
 Requisitos principales:
 
-- app shell navegable con conectividad intermitente;
-- selector de sucursal visible;
-- estado de sync visible;
-- service worker para shell/assets, NO para reproducir mutaciones autenticadas;
-- operaciones siguen pasando por Dexie + sync client;
-- no cachear PIN, cookies ni respuestas sensibles como mecanismo de persistencia offline.
+- formalizar `prisma/seed.ts` (ya existe un seed mínimo determinista: dueño +18095550123/1234, cajero +18095550999/5678, sucursales Los Mina e Invivienda);
+- `apps/web/e2e/foundation-flow.spec.ts` con el flujo login → scope → cola offline → reconexión;
+- `docs/runbooks/local-development.md` ya creado;
+- ejecutar la verificación completa (`lint/typecheck/test/integration/build/E2E`) en un entorno Node 24 con PostgreSQL.
 
 ## 4. Reglas de arquitectura
 
