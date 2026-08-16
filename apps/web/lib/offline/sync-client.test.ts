@@ -232,4 +232,72 @@ describe("sync client", () => {
     const supplier = await db.suppliers.get("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
     expect(supplier?.name).toBe("Distribuidora La Vega");
   });
+
+  it("applies CASH deltas (session + movements) to the local replica", async () => {
+    const transport: SyncTransport = {
+      push: vi.fn(async () => ({ results: [], cursor: "0" })),
+      pull: vi.fn(async () => ({
+        changes: [
+          {
+            cursor: "1",
+            ownerId,
+            branchId,
+            type: "CASH_OPEN",
+            payload: {
+              sessionId: "77777777-7777-4777-8777-777777777777",
+              branchId,
+              openingFloatCents: 200000,
+              openedAt: new Date().toISOString()
+            },
+            createdAt: new Date().toISOString()
+          },
+          {
+            cursor: "2",
+            ownerId,
+            branchId,
+            type: "CASH_EXPENSE",
+            payload: {
+              movementId: "88888888-8888-4888-8888-888888888888",
+              sessionId: "77777777-7777-4777-8777-777777777777",
+              type: "EXPENSE",
+              amountCents: 50000,
+              category: "Agua",
+              description: "Botellón",
+              reason: null,
+              occurredAt: new Date().toISOString()
+            },
+            createdAt: new Date().toISOString()
+          },
+          {
+            cursor: "3",
+            ownerId,
+            branchId,
+            type: "CASH_CLOSE",
+            payload: {
+              sessionId: "77777777-7777-4777-8777-777777777777",
+              countedCents: 150000,
+              expectedCents: 150000,
+              differenceCents: 0,
+              closedAt: new Date().toISOString()
+            },
+            createdAt: new Date().toISOString()
+          }
+        ],
+        nextCursor: "3",
+        hasMore: false
+      }))
+    };
+    const client = createSyncClient({ database: db, transport, sleep: async () => {} });
+    const summary = await client.syncNow(branchId);
+
+    expect(summary.pulled).toBe(3);
+    const session = await db.cashSessions.get("77777777-7777-4777-8777-777777777777");
+    expect(session?.status).toBe("CLOSED");
+    expect(session?.openingFloatCents).toBe(200000);
+    expect(session?.countedCents).toBe(150000);
+    expect(session?.differenceCents).toBe(0);
+    const movement = await db.cashMovements.get("88888888-8888-4888-8888-888888888888");
+    expect(movement?.type).toBe("EXPENSE");
+    expect(movement?.amountCents).toBe(50000);
+  });
 });

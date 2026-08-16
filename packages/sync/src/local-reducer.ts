@@ -149,6 +149,46 @@ export function reducePurchaseChange(change: SyncChangeRecord): ProjectionRowVal
   };
 }
 
+/** Sesión de caja (CASH_OPEN/CASH_CLOSE → upsert del estado de la sesión). */
+export function reduceCashSessionChange(change: SyncChangeRecord): ProjectionRowValue {
+  if (change.type !== "CASH_OPEN" && change.type !== "CASH_CLOSE") {
+    throw new Error("UNKNOWN_SYNC_CHANGE_TYPE");
+  }
+  const payload = asRecord(change.payload);
+  const sessionId = payload.sessionId;
+  if (typeof sessionId !== "string" || sessionId.length === 0) {
+    throw new Error("INVALID_SYNC_CHANGE_PAYLOAD");
+  }
+  return {
+    key: `${change.ownerId}:${change.branchId}:CASH_SESSION:${sessionId}`,
+    ownerId: change.ownerId,
+    branchId: change.branchId,
+    type: change.type,
+    cursor: change.cursor,
+    payload: change.payload
+  };
+}
+
+/** Movimiento de caja (CASH_EXPENSE/WITHDRAWAL/INJECTION → append-only). */
+export function reduceCashMovementChange(change: SyncChangeRecord): ProjectionRowValue {
+  if (change.type !== "CASH_EXPENSE" && change.type !== "CASH_WITHDRAWAL" && change.type !== "CASH_INJECTION") {
+    throw new Error("UNKNOWN_SYNC_CHANGE_TYPE");
+  }
+  const payload = asRecord(change.payload);
+  const movementId = payload.movementId;
+  if (typeof movementId !== "string" || movementId.length === 0) {
+    throw new Error("INVALID_SYNC_CHANGE_PAYLOAD");
+  }
+  return {
+    key: `${change.ownerId}:${change.branchId}:CASH_MOVEMENT:${movementId}`,
+    ownerId: change.ownerId,
+    branchId: change.branchId,
+    type: change.type,
+    cursor: change.cursor,
+    payload: change.payload
+  };
+}
+
 export function reduceChange(change: SyncChangeRecord): ProjectionRowValue {
   switch (change.type) {
     case "NOOP":
@@ -167,6 +207,13 @@ export function reduceChange(change: SyncChangeRecord): ProjectionRowValue {
       return reduceSupplierChange(change);
     case "PURCHASE":
       return reducePurchaseChange(change);
+    case "CASH_OPEN":
+    case "CASH_CLOSE":
+      return reduceCashSessionChange(change);
+    case "CASH_EXPENSE":
+    case "CASH_WITHDRAWAL":
+    case "CASH_INJECTION":
+      return reduceCashMovementChange(change);
     default:
       throw new Error("UNKNOWN_SYNC_CHANGE_TYPE");
   }

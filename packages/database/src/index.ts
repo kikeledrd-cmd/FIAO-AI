@@ -22,5 +22,11 @@ export { processStockAdjustment } from "./transactions/process-stock-adjustment"
 export { processSaleReversal } from "./transactions/process-sale-reversal";
 export { processSupplierUpsert } from "./transactions/process-supplier-upsert";
 export { processPurchase } from "./transactions/process-purchase";
+export { processCashOpen } from "./transactions/process-cash-open";
+export { processCashMovement } from "./transactions/process-cash-movement";
+export { processCashClose } from "./transactions/process-cash-close";
+export { computeExpectedCashForSession } from "./transactions/cash-shared";
 export { CustomerRepository } from "./repositories/customer-repository";
 export { SupplierRepository } from "./repositories/supplier-repository";
+export { CashRepository } from "./repositories/cash-repository";
+export type { CashStateResult } from "./repositories/cash-repository";

@@ -53,6 +53,8 @@ model OwnerAccount {
   suppliers           Supplier[]
   purchases           Purchase[]
   purchaseLines       PurchaseLine[]
+  cashSessions        CashSession[]
+  cashMovements       CashMovement[]
 }
 
 model Branch {
@@ -80,6 +82,8 @@ model Branch {
   suppliers           Supplier[]
   purchases           Purchase[]
   purchaseLines       PurchaseLine[]
+  cashSessions        CashSession[]
+  cashMovements       CashMovement[]
 
   @@index([ownerId, active])
 }
@@ -102,6 +106,9 @@ model User {
   auditEvents          AuditEvent[]         @relation("AuditActor")
   clientOperations     ClientOperation[]    @relation("OperationActor")
   sales                Sale[]               @relation("SaleActor")
+  cashSessionsOpened   CashSession[]        @relation("CashSessionOpenedBy")
+  cashSessionsClosed   CashSession[]        @relation("CashSessionClosedBy")
+  cashMovements        CashMovement[]       @relation("CashMovementActor")
 
   @@index([ownerId, role, active])
 }
@@ -132,6 +139,7 @@ model Device {
   auditEvents      AuditEvent[]
   clientOperations ClientOperation[]
   sales            Sale[]
+  cashMovements    CashMovement[]
 
   @@index([ownerId, userId, active])
 }
@@ -216,6 +224,7 @@ model ClientOperation {
   sales           Sale[]
   creditMovements CreditMovement[]
   purchases       Purchase[]
+  cashMovements   CashMovement[]
 
   @@unique([ownerId, operationId])
   @@index([ownerId, branchId, createdAt])
@@ -442,4 +451,62 @@ model CreditMovement {
   @@index([ownerId, branchId, customerId, createdAt])
   @@index([clientOperationId])
   @@unique([saleId, type])
+}
+
+/// Sesión de caja: una sola sesión abierta por sucursal (spec §10.1).
+/// El esperado NUNCA se guarda: se computa desde el float inicial + ventas
+/// cash no anuladas + abonos cash + movimientos (invariante 6 del roadmap).
+model CashSession {
+  id                String         @id @default(uuid()) @db.Uuid
+  ownerId           String         @db.Uuid
+  branchId          String         @db.Uuid
+  sessionId         String         @unique @db.Uuid
+  status            String         @default("OPEN")
+  openedById        String         @db.Uuid
+  openedAt          DateTime
+  openingFloatCents Int
+  closedById        String?        @db.Uuid
+  closedAt          DateTime?
+  countedCents      Int?
+  differenceCents   Int?
+  /// branchId cuando OPEN, null cuando CLOSED → única sesión abierta por
+  /// sucursal garantizada por constraint (Postgres permite NULLs múltiples).
+  openUniqueKey     String?        @unique @db.VarChar(64)
+  createdAt         DateTime       @default(now())
+  owner             OwnerAccount   @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch            Branch         @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  openedBy          User           @relation("CashSessionOpenedBy", fields: [openedById], references: [id], onDelete: Restrict)
+  closedBy          User?          @relation("CashSessionClosedBy", fields: [closedById], references: [id], onDelete: Restrict)
+  movements         CashMovement[]
+
+  @@index([ownerId, branchId, status])
+}
+
+/// Movimiento de caja append-only: EXPENSE / WITHDRAWAL / INJECTION /
+/// DIFFERENCE (el cierre registra la diferencia para cuadrar el ledger).
+model CashMovement {
+  id                String          @id @default(uuid()) @db.Uuid
+  ownerId           String          @db.Uuid
+  branchId          String          @db.Uuid
+  sessionId         String          @db.Uuid
+  movementId        String          @unique @db.Uuid
+  type              String
+  amountCents       Int
+  category          String?         @db.VarChar(60)
+  description       String?         @db.VarChar(300)
+  reason            String?         @db.VarChar(300)
+  actorUserId       String          @db.Uuid
+  deviceId          String          @db.Uuid
+  clientOperationId String?         @db.Uuid
+  occurredAt        DateTime
+  createdAt         DateTime        @default(now())
+  owner             OwnerAccount    @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch            Branch          @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  session           CashSession     @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  actor             User            @relation("CashMovementActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  device            Device          @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  clientOperation   ClientOperation? @relation(fields: [clientOperationId], references: [id], onDelete: Restrict)
+
+  @@index([ownerId, branchId, sessionId, createdAt])
+  @@index([clientOperationId])
 }

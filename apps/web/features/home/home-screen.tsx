@@ -16,6 +16,7 @@ const PLAN2_MODULES: { key: string; label: string; hint: string; href?: string }
   { key: "fiao", label: "Fiao", hint: "Fiado y abonos" },
   { key: "suppliers", label: "Proveedores", hint: "Compras y costos", href: "/suppliers" },
   { key: "inventory", label: "Inventario", hint: "Productos y stock", href: "/inventory" },
+  { key: "cash", label: "Caja", hint: "Apertura y arqueo", href: "/cash" },
   { key: "cash", label: "Caja", hint: "Apertura y cierre" }
 ] as const;
 

@@ -90,6 +90,7 @@ export function createSyncClient(options?: {
           await applyCustomerDeltasLocally(response.changes, database);
           await applyCreditDeltasLocally(response.changes, database);
           await upsertSuppliersLocally(response.changes, database);
+          await applyCashDeltasLocally(response.changes, database);
           pulled += response.changes.length;
           cursor = response.nextCursor;
           if (!response.hasMore) break;
@@ -229,6 +230,82 @@ function addToQuantity(left: string, right: string): string {
   const whole = total / 1000n;
   const fraction = (total % 1000n).toString().padStart(3, "0").replace(/0+$/, "");
   return `${whole}${fraction ? `.${fraction}` : ""}`;
+}
+
+/** Aplica deltas de caja: CASH_OPEN/CASH_CLOSE actualizan la sesión y
+ *  CASH_EXPENSE/WITHDRAWAL/INJECTION insertan movimientos append-only. */
+async function applyCashDeltasLocally(
+  changes: SyncChangeRecord[],
+  database: FiaoOfflineDatabase
+): Promise<void> {
+  await database.transaction("rw", database.cashSessions, database.cashMovements, async () => {
+    for (const change of changes) {
+      if (change.type === "CASH_OPEN") {
+        const payload = change.payload as {
+          sessionId?: string;
+          branchId?: string;
+          openingFloatCents?: number;
+          openedAt?: string;
+        };
+        if (!payload.sessionId || payload.openingFloatCents === undefined) continue;
+        await database.cashSessions.put({
+          sessionId: payload.sessionId,
+          ownerId: change.ownerId,
+          branchId: change.branchId,
+          status: "OPEN",
+          openingFloatCents: payload.openingFloatCents,
+          openedAt: payload.openedAt ?? change.createdAt,
+          countedCents: null,
+          differenceCents: null,
+          closedAt: null
+        });
+      } else if (change.type === "CASH_CLOSE") {
+        const payload = change.payload as {
+          sessionId?: string;
+          countedCents?: number;
+          differenceCents?: number;
+          closedAt?: string;
+        };
+        if (!payload.sessionId || payload.countedCents === undefined) continue;
+        const session = await database.cashSessions.get(payload.sessionId);
+        if (!session) continue;
+        await database.cashSessions.put({
+          ...session,
+          status: "CLOSED",
+          countedCents: payload.countedCents,
+          differenceCents: payload.differenceCents ?? 0,
+          closedAt: payload.closedAt ?? change.createdAt
+        });
+      } else if (change.type === "CASH_EXPENSE" || change.type === "CASH_WITHDRAWAL" || change.type === "CASH_INJECTION") {
+        const payload = change.payload as {
+          movementId?: string;
+          sessionId?: string;
+          type?: string;
+          amountCents?: number;
+          category?: string | null;
+          description?: string | null;
+          reason?: string | null;
+          occurredAt?: string;
+        };
+        if (!payload.movementId || !payload.sessionId || payload.amountCents === undefined) continue;
+        const type = payload.type === "WITHDRAWAL" || payload.type === "INJECTION" || payload.type === "DIFFERENCE"
+          ? payload.type
+          : "EXPENSE";
+        await database.cashMovements.put({
+          movementId: payload.movementId,
+          ownerId: change.ownerId,
+          branchId: change.branchId,
+          sessionId: payload.sessionId,
+          type,
+          amountCents: payload.amountCents,
+          category: payload.category ?? null,
+          description: payload.description ?? null,
+          reason: payload.reason ?? null,
+          occurredAt: payload.occurredAt ?? change.createdAt
+        });
+      }
+    }
+  });
 }
 
 async function applyCustomerDeltasLocally(

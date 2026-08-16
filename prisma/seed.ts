@@ -34,6 +34,8 @@ async function seed() {
     // Limpieza idempotente del historial comercial del dueño demo
     // (corridas E2E previas acumulan ventas/stock/saldo). Orden por FK Restrict.
     await tx.syncChange.deleteMany({ where: { ownerId: ownerAccount.id } });
+    await tx.cashMovement.deleteMany({ where: { ownerId: ownerAccount.id } });
+    await tx.cashSession.deleteMany({ where: { ownerId: ownerAccount.id } });
     await tx.purchaseLine.deleteMany({ where: { ownerId: ownerAccount.id } });
     await tx.purchase.deleteMany({ where: { ownerId: ownerAccount.id } });
     await tx.supplier.deleteMany({ where: { ownerId: ownerAccount.id } });

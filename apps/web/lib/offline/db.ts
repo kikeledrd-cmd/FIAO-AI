@@ -98,6 +98,33 @@ export interface LocalSupplierRow {
   active: boolean;
 }
 
+/** Sesión de caja local (deltas CASH_OPEN/CASH_CLOSE aplicados por el sync). */
+export interface LocalCashSessionRow {
+  sessionId: string;
+  ownerId: string;
+  branchId: string;
+  status: "OPEN" | "CLOSED";
+  openingFloatCents: number;
+  openedAt: string;
+  countedCents: number | null;
+  differenceCents: number | null;
+  closedAt: string | null;
+}
+
+/** Movimiento de caja local (append-only; deltas CASH_* aplicados por el sync). */
+export interface LocalCashMovementRow {
+  movementId: string;
+  ownerId: string;
+  branchId: string;
+  sessionId: string;
+  type: "EXPENSE" | "WITHDRAWAL" | "INJECTION" | "DIFFERENCE";
+  amountCents: number;
+  category: string | null;
+  description: string | null;
+  reason: string | null;
+  occurredAt: string;
+}
+
 export class FiaoOfflineDatabase extends Dexie {
   pendingOperations!: Table<PendingOperationRow, string>;
   syncMeta!: Table<SyncMetaRow, string>;
@@ -109,6 +136,8 @@ export class FiaoOfflineDatabase extends Dexie {
   customers!: Table<LocalCustomerRow, string>;
   creditMovements!: Table<CreditMovementRow, string>;
   suppliers!: Table<LocalSupplierRow, string>;
+  cashSessions!: Table<LocalCashSessionRow, string>;
+  cashMovements!: Table<LocalCashMovementRow, string>;
 
   constructor(name = "fiao-offline") {
     super(name);
@@ -151,6 +180,20 @@ export class FiaoOfflineDatabase extends Dexie {
       customers: "&customerId, ownerId, branchId, name, active",
       creditMovements: "&movementId, ownerId, branchId, customerId, type, occurredAt",
       suppliers: "&supplierId, ownerId, branchId, name, active"
+    });
+    this.version(5).stores({
+      pendingOperations: "&operationId, branchId, occurredAt, queuedAt",
+      syncMeta: "&branchId, ownerId",
+      syncConflicts: "&id, ownerId, operationId, branchId, kind, createdAt",
+      branches: "&id, ownerId",
+      users: "&id, ownerId, role",
+      projectionRows: "&key, ownerId, branchId, type, cursor",
+      catalog: "&productId, ownerId, branchId, name, active",
+      customers: "&customerId, ownerId, branchId, name, active",
+      creditMovements: "&movementId, ownerId, branchId, customerId, type, occurredAt",
+      suppliers: "&supplierId, ownerId, branchId, name, active",
+      cashSessions: "&sessionId, ownerId, branchId, status",
+      cashMovements: "&movementId, ownerId, branchId, sessionId, type, occurredAt"
     });
   }
 }

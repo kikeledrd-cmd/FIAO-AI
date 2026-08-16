@@ -1,6 +1,8 @@
 import type { SyncChangeRecord } from "@fiao/contracts/sync";
 import { describe, expect, it } from "vitest";
 import {
+  reduceCashMovementChange,
+  reduceCashSessionChange,
   reduceChange,
   reduceCreditChange,
   reduceCustomerChange,
@@ -178,6 +180,74 @@ describe("reducePurchaseChange", () => {
 
   it("rejects malformed PURCHASE payloads", () => {
     expect(() => reducePurchaseChange({ ...baseChange, type: "PURCHASE", payload: {} })).toThrow("INVALID_SYNC_CHANGE_PAYLOAD");
+  });
+});
+
+describe("reduceCashSessionChange", () => {
+  it("projects a CASH_OPEN change keyed by sessionId", () => {
+    const row = reduceCashSessionChange({
+      ...baseChange,
+      type: "CASH_OPEN",
+      payload: {
+        sessionId: "70000000-0000-4000-8000-000000000001",
+        branchId: "10000000-0000-4000-8000-000000000001",
+        openingFloatCents: 200000,
+        openedAt: "2026-08-16T12:00:00.000Z"
+      }
+    });
+    expect(row.key).toBe("30000000-0000-4000-8000-000000000001:10000000-0000-4000-8000-000000000001:CASH_SESSION:70000000-0000-4000-8000-000000000001");
+    expect(row.type).toBe("CASH_OPEN");
+  });
+
+  it("projects a CASH_CLOSE change with the same session key", () => {
+    const row = reduceCashSessionChange({
+      ...baseChange,
+      type: "CASH_CLOSE",
+      payload: {
+        sessionId: "70000000-0000-4000-8000-000000000001",
+        countedCents: 195000,
+        expectedCents: 200000,
+        differenceCents: -5000,
+        closedAt: "2026-08-16T20:00:00.000Z"
+      }
+    });
+    expect(row.key).toContain(":CASH_SESSION:70000000-0000-4000-8000-000000000001");
+    expect(row.type).toBe("CASH_CLOSE");
+  });
+
+  it("rejects malformed CASH_OPEN payloads", () => {
+    expect(() => reduceCashSessionChange({ ...baseChange, type: "CASH_OPEN", payload: {} })).toThrow("INVALID_SYNC_CHANGE_PAYLOAD");
+  });
+});
+
+describe("reduceCashMovementChange", () => {
+  it("projects a CASH_EXPENSE change keyed by movementId", () => {
+    const row = reduceCashMovementChange({
+      ...baseChange,
+      type: "CASH_EXPENSE",
+      payload: {
+        movementId: "80000000-0000-4000-8000-000000000001",
+        sessionId: "70000000-0000-4000-8000-000000000001",
+        type: "EXPENSE",
+        amountCents: 50000,
+        category: "Agua",
+        description: "Botellón",
+        reason: null,
+        occurredAt: "2026-08-16T13:00:00.000Z"
+      }
+    });
+    expect(row.key).toBe("30000000-0000-4000-8000-000000000001:10000000-0000-4000-8000-000000000001:CASH_MOVEMENT:80000000-0000-4000-8000-000000000001");
+    expect(row.type).toBe("CASH_EXPENSE");
+  });
+
+  it("rejects malformed CASH_INJECTION payloads", () => {
+    expect(() =>
+      reduceCashMovementChange({ ...baseChange, type: "CASH_INJECTION", payload: { sessionId: "x" } })
+    ).toThrow("INVALID_SYNC_CHANGE_PAYLOAD");
+  });
+
+  it("rejects non-cash movement types", () => {
+    expect(() => reduceCashMovementChange({ ...baseChange, type: "SALE" })).toThrow("UNKNOWN_SYNC_CHANGE_TYPE");
   });
 });
 

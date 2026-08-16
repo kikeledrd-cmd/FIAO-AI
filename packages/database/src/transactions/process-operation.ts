@@ -11,6 +11,9 @@ import {
 import { databaseClient, type FiaoPrismaClient } from "../client";
 import { SyncRepository } from "../repositories/sync-repository";
 import { processAbonoOperation } from "./process-abono";
+import { processCashClose } from "./process-cash-close";
+import { processCashMovement } from "./process-cash-movement";
+import { processCashOpen } from "./process-cash-open";
 import { processCustomerUpsert } from "./process-customer";
 import { processSaleOperation } from "./process-sale";
 import { processSaleReversal } from "./process-sale-reversal";
@@ -32,6 +35,11 @@ export async function processOperation(
     if (envelope.type === "SALE_REVERSAL") return processSaleReversal(context, envelope, db);
     if (envelope.type === "SUPPLIER_UPSERT") return processSupplierUpsert(context, envelope, db);
     if (envelope.type === "PURCHASE") return processPurchase(context, envelope, db);
+    if (envelope.type === "CASH_OPEN") return processCashOpen(context, envelope, db);
+    if (envelope.type === "CASH_EXPENSE" || envelope.type === "CASH_WITHDRAWAL" || envelope.type === "CASH_INJECTION") {
+      return processCashMovement(context, envelope, db);
+    }
+    if (envelope.type === "CASH_CLOSE") return processCashClose(context, envelope, db);
   }
   if (!isFoundationOperationType(envelope.type)) throw new Error("UNKNOWN_OPERATION_TYPE");
 

@@ -18,12 +18,12 @@ El roadmap técnico está en:
 
 El plan que se está ejecutando actualmente está en:
 
-`docs/superpowers/plans/2026-08-13-fiao-purchasing-suppliers.md`
+`docs/superpowers/plans/2026-08-13-fiao-cash-register.md`
 
 > Plan 1 (foundation/sync/auth/PWA) completado; Tasks 11 (POS ventas), 12
-> (fiado/clientes), 13 (inventario/reversos) y 14 (compras/proveedores)
-> completadas; la siguiente tarea es Task 15 (caja: apertura/cierre, gastos y
-> arqueo).
+> (fiado/clientes), 13 (inventario/reversos), 14 (compras/proveedores) y 15
+> (caja) completadas; la siguiente tarea es Task 16 (devoluciones/apartados y
+> lealtad/promociones).
 
 Si código y memoria conversacional difieren, primero revisar estos documentos y después el historial Git.
 
@@ -219,6 +219,46 @@ Requisitos principales:
 >   `clientOperation` (nuevo FK Restrict); `parseSaleQuantity` rechaza "0" →
 >   manejo explícito en sumas de stock; los keys de los reducers deben
 >   incluir ownerId+branchId completos en los tests (sin elipsis).
+
+### Siguiente tarea (Plan 2)
+
+**Task 15: Caja (apertura/cierre, gastos, retiros, inyecciones y arqueo).**
+
+> ✅ **COMPLETADA 2026-08-16.** Verificación completa pasó en esta máquina
+> (Node 22 + PostgreSQL 18 en Docker): `lint` (0 errores), `typecheck`,
+> `test` (144), `test:integration` (74), `build` y `test:e2e` (18/18 en
+> Chromium móvil).
+> Notas de ejecución:
+>
+> - dominio: `contracts/cash.ts` + `domain/cash/cash-policy.ts` —
+>   `computeExpectedCash` (float + ventas cash no anuladas + abonos +
+>   inyecciones − gastos − retiros, aritmética entera), límite de gasto del
+>   cajero `CASHIER_EXPENSE_LIMIT_CENTS` (RD$ 1.000), retiros/inyecciones y
+>   cierre con diferencia siempre con autorización de OWNER;
+> - persistencia: migración `commerce_cash` — `CashSession` (con
+>   `openUniqueKey` nullable → única sesión abierta por sucursal por
+>   constraint) y `CashMovement` (EXPENSE/WITHDRAWAL/INJECTION/DIFFERENCE,
+>   append-only); procesadores `process-cash-open.ts`,
+>   `process-cash-movement.ts` y `process-cash-close.ts`; el cierre computa
+>   el esperado en `cash-shared.ts` y registra el movimiento DIFFERENCE;
+> - sync: `CASH_OPEN`/`CASH_EXPENSE`/`CASH_WITHDRAWAL`/
+>   `CASH_INJECTION`/`CASH_CLOSE` en `COMMERCE_OPERATION_TYPES`;
+>   `reduceCashSessionChange`/`reduceCashMovementChange`; Dexie v5 con
+>   `cashSessions`/`cashMovements`; `applyCashDeltasLocally` en el sync
+>   client;
+> - API: `GET /api/cash` (sesión + movimientos + esperado computado solo
+>   para sesión abierta);
+> - UI: pantalla `/cash` (estado de sesión, abrir caja, gasto/retiro/
+>   inyección con PIN cuando aplica, cierre con arqueo y diferencia, esperado
+>   local recalculado con cada movimiento); card Caja en home;
+> - E2E `cash-flow.spec.ts`: abrir caja, gasto, cierre cuadrando, cajero con
+>   diferencia exige PIN, OWNER cierra con diferencia auditada;
+> - gotchas: el seed ahora limpia `cashMovement/cashSession` (FK Restrict
+>   nuevo) antes de `syncChange`; la pantalla necesita estado `loading` para
+>   que los tests no clickeen botones que se desmontan; `fill()` de inputs
+>   number rechaza comas; el botón Confirmar se deshabilita hasta escribir el
+>   PIN cuando hay diferencia; `exactOptionalPropertyTypes` exige spreads
+>   condicionales en los patches de la UI.
 
 ## 4. Reglas de arquitectura
 

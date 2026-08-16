@@ -26,3 +26,13 @@ export { isOwnerAuthorizer, ownerAuthorizationExpiresAt, OWNER_AUTHORIZATION_TTL
 export type { OwnerAuthorizationScope } from "./auth/authorize-owner";
 export { applyStockDelta, parseAdjustmentDelta } from "./inventory/inventory-policy";
 export { assertPurchaseLineValid, computeMovingAverageCost } from "./purchasing/purchase-policy";
+export {
+  assertCanClose,
+  assertExpenseAllowed,
+  assertNonNegativeCents,
+  assertOwnerProtectedMovement,
+  assertPositiveCents,
+  CASHIER_EXPENSE_LIMIT_CENTS,
+  computeExpectedCash
+} from "./cash/cash-policy";
+export type { ExpectedCashInput } from "./cash/cash-policy";
