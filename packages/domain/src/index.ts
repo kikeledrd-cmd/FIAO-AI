@@ -12,6 +12,14 @@ export {
   validateSale
 } from "./sales/sale-policy";
 export type { SaleLineTotal, SalePolicyResult } from "./sales/sale-policy";
+export {
+  computeFiaoScore,
+  creditBalanceCents,
+  parseMoneyCents,
+  assertCreditLimit,
+  assertAbonoValid
+} from "./credit/credit-policy";
+export type { CreditMovementInput, FiaoScore, FiaoScoreInput } from "./credit/credit-policy";
 export { can } from "./auth/permissions";
 export type { Permission } from "./auth/permissions";
 export { isOwnerAuthorizer, ownerAuthorizationExpiresAt, OWNER_AUTHORIZATION_TTL_MS } from "./auth/authorize-owner";

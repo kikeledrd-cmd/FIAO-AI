@@ -44,12 +44,51 @@ export function reduceSaleChange(change: SyncChangeRecord): ProjectionRowValue {
   };
 }
 
+export function reduceCustomerChange(change: SyncChangeRecord): ProjectionRowValue {
+  if (change.type !== "CUSTOMER") throw new Error("UNKNOWN_SYNC_CHANGE_TYPE");
+  const payload = asRecord(change.payload);
+  const customerId = payload.customerId;
+  if (typeof customerId !== "string" || customerId.length === 0) {
+    throw new Error("INVALID_SYNC_CHANGE_PAYLOAD");
+  }
+  return {
+    key: `${change.ownerId}:${change.branchId}:CUSTOMER:${customerId}`,
+    ownerId: change.ownerId,
+    branchId: change.branchId,
+    type: change.type,
+    cursor: change.cursor,
+    payload: change.payload
+  };
+}
+
+export function reduceCreditChange(change: SyncChangeRecord): ProjectionRowValue {
+  if (change.type !== "CREDIT") throw new Error("UNKNOWN_SYNC_CHANGE_TYPE");
+  const payload = asRecord(change.payload);
+  const movementId = payload.movementId;
+  const customerId = payload.customerId;
+  if (typeof movementId !== "string" || movementId.length === 0 || typeof customerId !== "string" || customerId.length === 0) {
+    throw new Error("INVALID_SYNC_CHANGE_PAYLOAD");
+  }
+  return {
+    key: `${change.ownerId}:${change.branchId}:CREDIT:${movementId}`,
+    ownerId: change.ownerId,
+    branchId: change.branchId,
+    type: change.type,
+    cursor: change.cursor,
+    payload: change.payload
+  };
+}
+
 export function reduceChange(change: SyncChangeRecord): ProjectionRowValue {
   switch (change.type) {
     case "NOOP":
       return reduceFoundationChange(change);
     case "SALE":
       return reduceSaleChange(change);
+    case "CUSTOMER":
+      return reduceCustomerChange(change);
+    case "CREDIT":
+      return reduceCreditChange(change);
     default:
       throw new Error("UNKNOWN_SYNC_CHANGE_TYPE");
   }

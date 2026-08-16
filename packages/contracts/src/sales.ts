@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const SALE_PAYMENT_METHODS = ["CASH", "TRANSFER", "CARD"] as const;
+export const SALE_PAYMENT_METHODS = ["CASH", "TRANSFER", "CARD", "FIADO"] as const;
 export type SalePaymentMethod = (typeof SALE_PAYMENT_METHODS)[number];
 
 /** Cantidad decimal fija (hasta 3 decimales), p. ej. "1", "0.5", "2.250". */

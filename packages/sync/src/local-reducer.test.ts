@@ -1,6 +1,6 @@
 import type { SyncChangeRecord } from "@fiao/contracts/sync";
 import { describe, expect, it } from "vitest";
-import { reduceChange, reduceSaleChange } from "./local-reducer";
+import { reduceChange, reduceCreditChange, reduceCustomerChange, reduceSaleChange } from "./local-reducer";
 
 const baseChange: SyncChangeRecord = {
   cursor: "42",
@@ -34,6 +34,53 @@ describe("reduceSaleChange", () => {
   });
 });
 
+describe("reduceCustomerChange", () => {
+  it("projects a CUSTOMER change keyed by owner/branch/customerId", () => {
+    const row = reduceCustomerChange({
+      ...baseChange,
+      type: "CUSTOMER",
+      payload: {
+        customerId: "60000000-0000-4000-8000-000000000001",
+        name: "Doña María",
+        phoneE164: "+18095550001",
+        creditLimitCents: 100000,
+        defaultPromiseDays: 7,
+        active: true
+      }
+    });
+    expect(row.key).toBe("30000000-0000-4000-8000-000000000001:10000000-0000-4000-8000-000000000001:CUSTOMER:60000000-0000-4000-8000-000000000001");
+    expect(row.type).toBe("CUSTOMER");
+  });
+
+  it("rejects malformed CUSTOMER payloads", () => {
+    expect(() => reduceCustomerChange({ ...baseChange, type: "CUSTOMER", payload: {} })).toThrow("INVALID_SYNC_CHANGE_PAYLOAD");
+  });
+});
+
+describe("reduceCreditChange", () => {
+  it("projects a CREDIT change keyed by movementId", () => {
+    const row = reduceCreditChange({
+      ...baseChange,
+      type: "CREDIT",
+      payload: {
+        movementId: "70000000-0000-4000-8000-000000000001",
+        type: "FIAO_SALE",
+        customerId: "60000000-0000-4000-8000-000000000001",
+        amountCents: 5500,
+        saleId: "40000000-0000-4000-8000-000000000001",
+        abonoId: null,
+        occurredAt: "2026-08-16T12:00:00.000Z"
+      }
+    });
+    expect(row.key).toBe("30000000-0000-4000-8000-000000000001:10000000-0000-4000-8000-000000000001:CREDIT:70000000-0000-4000-8000-000000000001");
+    expect(row.type).toBe("CREDIT");
+  });
+
+  it("rejects malformed CREDIT payloads", () => {
+    expect(() => reduceCreditChange({ ...baseChange, type: "CREDIT", payload: { amountCents: 1 } })).toThrow("INVALID_SYNC_CHANGE_PAYLOAD");
+  });
+});
+
 describe("reduceChange", () => {
   it("dispatches by change type", () => {
     expect(reduceChange(baseChange).type).toBe("SALE");
@@ -44,6 +91,23 @@ describe("reduceChange", () => {
         payload: { operationId: "40000000-0000-4000-8000-000000000002" }
       }).type
     ).toBe("NOOP");
+    expect(
+      reduceChange({
+        ...baseChange,
+        type: "CUSTOMER",
+        payload: { customerId: "60000000-0000-4000-8000-000000000001" }
+      }).type
+    ).toBe("CUSTOMER");
+    expect(
+      reduceChange({
+        ...baseChange,
+        type: "CREDIT",
+        payload: {
+          movementId: "70000000-0000-4000-8000-000000000001",
+          customerId: "60000000-0000-4000-8000-000000000001"
+        }
+      }).type
+    ).toBe("CREDIT");
   });
 
   it("rejects unknown types", () => {

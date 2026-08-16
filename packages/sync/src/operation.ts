@@ -4,7 +4,7 @@ import type { CommandContext } from "@fiao/domain/context";
 export const FOUNDATION_OPERATION_TYPES = ["NOOP"] as const;
 export type FoundationOperationType = (typeof FOUNDATION_OPERATION_TYPES)[number];
 
-export const COMMERCE_OPERATION_TYPES = ["SALE"] as const;
+export const COMMERCE_OPERATION_TYPES = ["SALE", "CUSTOMER_UPSERT", "ABONO"] as const;
 export type CommerceOperationType = (typeof COMMERCE_OPERATION_TYPES)[number];
 
 export const ALL_OPERATION_TYPES = [...FOUNDATION_OPERATION_TYPES, ...COMMERCE_OPERATION_TYPES] as const;

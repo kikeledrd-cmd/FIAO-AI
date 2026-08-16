@@ -1,6 +1,7 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CatalogProduct } from "@fiao/contracts/sales";
+import { loadCustomersFromServer } from "@/lib/offline/customers";
 import { SalesScreen, formatMoneyCents } from "./sales-screen";
 
 const hoisted = vi.hoisted(() => {
@@ -66,6 +67,12 @@ vi.mock("@/lib/offline/catalog", () => ({
   adjustLocalStock: vi.fn().mockResolvedValue(undefined)
 }));
 
+vi.mock("@/lib/offline/customers", () => ({
+  listCustomersLocally: vi.fn().mockResolvedValue([]),
+  loadCustomersFromServer: vi.fn().mockResolvedValue([]),
+  saveCustomersLocally: vi.fn().mockResolvedValue(undefined)
+}));
+
 describe("formatMoneyCents", () => {
   it("formats pesos dominicanos with cents", () => {
     expect(formatMoneyCents(27500)).toBe("RD$275.00");
@@ -129,5 +136,38 @@ describe("SalesScreen", () => {
 
     await waitFor(() => expect(screen.getByText("Venta registrada")).toBeInTheDocument());
     expect(screen.getByText("Efectivo")).toBeInTheDocument();
+  });
+
+  it("enqueues a FIADO sale with customerId when fiado is selected", async () => {
+    vi.mocked(loadCustomersFromServer).mockResolvedValue([
+      {
+        customerId: "60000000-0000-4000-8000-000000000001",
+        ownerId: "o1",
+        branchId: "20000000-0000-4000-8000-000000000001",
+        name: "Doña María",
+        phoneE164: "+18095550001",
+        creditLimitCents: 100000,
+        defaultPromiseDays: 7,
+        active: true,
+        balanceCents: 0
+      }
+    ]);
+    render(<SalesScreen />);
+    await waitFor(() => expect(screen.getByText("Arroz La Garza 5lb")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Arroz La Garza 5lb"));
+    fireEvent.click(screen.getByRole("button", { name: "Cobrar" }));
+
+    const dialog = screen.getByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Fiado" }));
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Cliente a fiado" }), {
+      target: { value: "60000000-0000-4000-8000-000000000001" }
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Confirmar venta" }));
+
+    await waitFor(() => expect(enqueueMock).toHaveBeenCalledTimes(1));
+    const input = enqueueMock.mock.calls[0]![0];
+    expect(input.type).toBe("SALE");
+    expect(input.payload.customerId).toBe("60000000-0000-4000-8000-000000000001");
+    expect(input.payload.payments).toEqual([{ method: "FIADO", amountCents: 27500 }]);
   });
 });

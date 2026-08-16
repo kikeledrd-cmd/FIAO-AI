@@ -31,6 +31,18 @@ async function seed() {
       create: { id: OWNER_ACCOUNT_ID, name: "Colmado Demo" }
     });
 
+    // Limpieza idempotente del historial comercial del dueño demo
+    // (corridas E2E previas acumulan ventas/stock/saldo). Orden por FK Restrict.
+    await tx.syncChange.deleteMany({ where: { ownerId: ownerAccount.id } });
+    await tx.stockMovement.deleteMany({ where: { ownerId: ownerAccount.id } });
+    await tx.creditMovement.deleteMany({ where: { ownerId: ownerAccount.id } });
+    await tx.sale.deleteMany({ where: { ownerId: ownerAccount.id } });
+    await tx.auditEvent.deleteMany({ where: { ownerId: ownerAccount.id } });
+    await tx.clientOperation.deleteMany({ where: { ownerId: ownerAccount.id } });
+    await tx.customer.deleteMany({ where: { ownerId: ownerAccount.id } });
+    await tx.productStock.deleteMany({ where: { ownerId: ownerAccount.id } });
+    await tx.product.deleteMany({ where: { ownerId: ownerAccount.id } });
+
     await tx.branch.upsert({
       where: { id: BRANCH_LOS_MINA_ID },
       update: { ownerId: ownerAccount.id, name: "Los Mina", active: true },
@@ -62,9 +74,11 @@ async function seed() {
 
     await seedCatalog(tx, ownerAccount.id, BRANCH_LOS_MINA_ID);
     await seedCatalog(tx, ownerAccount.id, BRANCH_INVIVIENDA_ID);
+    await seedCustomers(tx, ownerAccount.id, BRANCH_LOS_MINA_ID);
+    await seedCustomers(tx, ownerAccount.id, BRANCH_INVIVIENDA_ID);
   });
 
-  console.log("Seed complete: owner + cashier + 2 branches + catalog (Los Mina, Invivienda).");
+  console.log("Seed complete: owner + cashier + 2 branches + catalog + customers (Los Mina, Invivienda).");
 }
 
 const DEMO_CATALOG = [
@@ -79,6 +93,56 @@ const DEMO_CATALOG = [
   { name: "Recarga RD$100", barcode: null, priceCents: 10000, stockControl: false, unitLabel: "recarga", onHand: null },
   { name: "Plátanos 1lb", barcode: "8400000000081", priceCents: 3500, unitLabel: "lb", onHand: "50" }
 ] as const;
+
+const DEMO_CUSTOMERS = [
+  { name: "Doña María Peña", phoneE164: "+18095550001", creditLimitCents: 100000, defaultPromiseDays: 7, seedSuffix: "0001" },
+  { name: "Don Rafael Marte", phoneE164: "+18095550002", creditLimitCents: 50000, defaultPromiseDays: 7, seedSuffix: "0002" },
+  { name: "Yenny Rosario", phoneE164: "+18095550003", creditLimitCents: 25000, defaultPromiseDays: 3, seedSuffix: "0003" }
+] as const;
+
+/** customerId derivado por sucursal (el id es único global por dueño). */
+function customerIdForBranch(suffix: string, branchId: string): string {
+  const branchNum = branchId === BRANCH_INVIVIENDA_ID ? "2" : "1";
+  return `40000000-0000-4000-8000-${branchNum}0000000${suffix}`;
+}
+
+async function seedCustomers(tx: Parameters<Parameters<typeof databaseClient.$transaction>[0]>[0], ownerId: string, branchId: string) {
+  for (const item of DEMO_CUSTOMERS) {
+    const customerPublicId = customerIdForBranch(item.seedSuffix, branchId);
+    const customer = await tx.customer.upsert({
+      where: { customerId: customerPublicId },
+      update: {
+        name: item.name,
+        phoneE164: item.phoneE164,
+        creditLimitCents: item.creditLimitCents,
+        defaultPromiseDays: item.defaultPromiseDays,
+        active: true
+      },
+      create: {
+        ownerId,
+        branchId,
+        customerId: customerPublicId,
+        name: item.name,
+        phoneE164: item.phoneE164,
+        creditLimitCents: item.creditLimitCents,
+        defaultPromiseDays: item.defaultPromiseDays
+      }
+    });
+    // Saldo inicial demo: Doña María debe RD$800 (dentro de su límite de RD$1,000).
+    if (item.seedSuffix === "0001") {
+      await tx.creditMovement.create({
+        data: {
+          ownerId,
+          branchId,
+          customerId: customer.id,
+          type: "FIAO_SALE",
+          amountCents: 80000,
+          occurredAt: new Date(Date.now() - 3 * 24 * 3600 * 1000)
+        }
+      });
+    }
+  }
+}
 
 async function seedCatalog(tx: Parameters<Parameters<typeof databaseClient.$transaction>[0]>[0], ownerId: string, branchId: string) {
   for (const item of DEMO_CATALOG) {

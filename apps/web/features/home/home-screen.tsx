@@ -12,8 +12,8 @@ const ROLE_LABEL = {
 
 const PLAN2_MODULES: { key: string; label: string; hint: string; href?: Route }[] = [
   { key: "sell", label: "Vender", hint: "POS rápido", href: "/sell" },
+  { key: "customers", label: "Clientes", hint: "Fiado y abonos", href: "/customers" },
   { key: "fiao", label: "Fiao", hint: "Fiado y abonos" },
-  { key: "customers", label: "Clientes", hint: "Cuentas y límites" },
   { key: "inventory", label: "Inventario", hint: "Productos y stock" },
   { key: "cash", label: "Caja", hint: "Apertura y cierre" }
 ] as const;

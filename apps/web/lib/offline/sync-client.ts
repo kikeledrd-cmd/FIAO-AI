@@ -3,6 +3,7 @@ import { ApiError, apiJson } from "@/lib/api/client";
 import { FiaoOfflineDatabase, offlineDb } from "./db";
 import { applySyncChanges, listPendingOperations, markOperationResult } from "./queue";
 import { adjustLocalStock } from "./catalog";
+import { applyCreditDeltasLocally, upsertCustomersLocally } from "./customers";
 
 export interface SyncSummary {
   pushed: number;
@@ -83,6 +84,8 @@ export function createSyncClient(options?: {
           assertCursorProgress(cursor, response.nextCursor, response.hasMore);
           await applySyncChanges(response.changes, database);
           await applySaleDeltasToLocalCatalog(response.changes, database);
+          await applyCustomerDeltasLocally(response.changes, database);
+          await applyCreditDeltasLocally(response.changes, database);
           pulled += response.changes.length;
           cursor = response.nextCursor;
           if (!response.hasMore) break;
@@ -155,6 +158,26 @@ async function applySaleDeltasToLocalCatalog(
   }
   if (deltas.length === 0) return;
   await adjustLocalStock(changes[0]!.branchId, deltas, database);
+}
+
+async function applyCustomerDeltasLocally(
+  changes: SyncChangeRecord[],
+  database: FiaoOfflineDatabase
+): Promise<void> {
+  const customers = changes
+    .filter((change) => change.type === "CUSTOMER")
+    .map((change) => change.payload as CustomerDeltaPayload);
+  if (customers.length === 0) return;
+  await upsertCustomersLocally(customers, database);
+}
+
+interface CustomerDeltaPayload {
+  customerId: string;
+  name: string;
+  phoneE164: string | null;
+  creditLimitCents: number;
+  defaultPromiseDays: number;
+  active: boolean;
 }
 
 async function recordSyncError(

@@ -12,6 +12,7 @@ import {
   loadCatalogFromServer,
   saveCatalogLocally
 } from "@/lib/offline/catalog";
+import { listCustomersLocally, loadCustomersFromServer, saveCustomersLocally, type CustomerWithBalance } from "@/lib/offline/customers";
 import { syncNow } from "@/lib/offline/sync-client";
 import { ReceiptView } from "./receipt";
 
@@ -31,13 +32,15 @@ interface CartLine {
 const PAYMENT_LABEL: Record<SalePaymentMethod, string> = {
   CASH: "Efectivo",
   TRANSFER: "Transferencia",
-  CARD: "Tarjeta"
+  CARD: "Tarjeta",
+  FIADO: "Fiado"
 };
 
 export function SalesScreen() {
   const { user, branches, activeBranchId, online } = useAppShell();
   const { syncing, sync } = useSync();
   const [products, setProducts] = useState<CatalogProduct[]>([]);
+  const [customers, setCustomers] = useState<CustomerWithBalance[]>([]);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
@@ -71,6 +74,32 @@ export function SalesScreen() {
       }
     }
     void loadCatalog();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBranchId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadCustomers() {
+      try {
+        if (navigator.onLine) {
+          const fresh = await loadCustomersFromServer(activeBranchId);
+          if (cancelled) return;
+          setCustomers(fresh);
+          await saveCustomersLocally(fresh).catch(() => undefined);
+        } else {
+          const local = await listCustomersLocally(activeBranchId);
+          if (cancelled) return;
+          if (local.length > 0) setCustomers(local);
+        }
+      } catch {
+        if (cancelled) return;
+        const local = await listCustomersLocally(activeBranchId).catch(() => []);
+        if (local.length > 0) setCustomers(local);
+      }
+    }
+    void loadCustomers();
     return () => {
       cancelled = true;
     };
@@ -135,7 +164,7 @@ export function SalesScreen() {
     setCart([]);
   }
 
-  async function confirmSale(payments: SalePayment[]) {
+  async function confirmSale(payments: SalePayment[], customerId?: string) {
     if (cartLines.length === 0 || submitting) return;
     setSubmitting(true);
     try {
@@ -147,7 +176,7 @@ export function SalesScreen() {
       const saleId = crypto.randomUUID();
       await enqueueOperation({
         type: "SALE",
-        payload: { saleId, lines, payments },
+        payload: { saleId, customerId, lines, payments },
         ownerId: user.ownerId,
         branchId: activeBranchId,
         actorUserId: user.id,
@@ -173,6 +202,16 @@ export function SalesScreen() {
         })
       );
       const methodLabel = payments.map((payment) => PAYMENT_LABEL[payment.method]).join(" + ");
+      const fiadoCents = payments.filter((payment) => payment.method === "FIADO").reduce((sum, payment) => sum + payment.amountCents, 0);
+      if (fiadoCents > 0 && customerId) {
+        setCustomers((current) =>
+          current.map((customer) =>
+            customer.customerId === customerId
+              ? { ...customer, balanceCents: customer.balanceCents + fiadoCents }
+              : customer
+          )
+        );
+      }
       setReceipt({ saleId, totalCents, methodLabel });
       setCart([]);
       setPaying(false);
@@ -260,6 +299,7 @@ export function SalesScreen() {
       {paying ? (
         <PaymentSheet
           totalCents={totalCents}
+          customers={customers}
           online={online}
           syncing={syncing}
           submitting={submitting}
@@ -281,6 +321,7 @@ function decrementQuantity(quantity: string): string {
 
 function PaymentSheet({
   totalCents,
+  customers,
   online,
   syncing,
   submitting,
@@ -288,19 +329,27 @@ function PaymentSheet({
   onConfirm
 }: {
   totalCents: number;
+  customers: CustomerWithBalance[];
   online: boolean;
   syncing: boolean;
   submitting: boolean;
   onCancel: () => void;
-  onConfirm: (payments: SalePayment[]) => Promise<void>;
+  onConfirm: (payments: SalePayment[], customerId?: string) => Promise<void>;
 }) {
   const [method, setMethod] = useState<SalePaymentMethod>("CASH");
   const [cashAmount, setCashAmount] = useState<string>(String(Math.round(totalCents / 100)));
   const [mixed, setMixed] = useState(false);
   const [secondMethod, setSecondMethod] = useState<SalePaymentMethod>("TRANSFER");
+  const [customerId, setCustomerId] = useState<string>("");
 
   const cashAmountCents = Math.round(Number(cashAmount) * 100);
   const changeCents = method === "CASH" && !mixed ? cashAmountCents - totalCents : 0;
+
+  const selectedCustomer = customers.find((customer) => customer.customerId === customerId);
+  const fiadoExceedsLimit =
+    method === "FIADO" && selectedCustomer
+      ? selectedCustomer.balanceCents + totalCents > selectedCustomer.creditLimitCents
+      : false;
 
   function buildPayments(): SalePayment[] | null {
     if (!mixed) {
@@ -321,6 +370,9 @@ function PaymentSheet({
   }
 
   const payments = buildPayments();
+  const fiadoSelected = method === "FIADO";
+  const canConfirm =
+    payments !== null && (!fiadoSelected || customerId !== "") && !fiadoExceedsLimit;
 
   return (
     <div className="pos-modal-backdrop" role="presentation">
@@ -363,6 +415,27 @@ function PaymentSheet({
           </p>
         ) : null}
 
+        {fiadoSelected ? (
+          <div className="pos-fiado-customer">
+            <label className="pos-field">
+              Cliente a fiado
+              <select value={customerId} onChange={(event) => setCustomerId(event.target.value)}>
+                <option value="">Seleccionar cliente…</option>
+                {customers.map((customer) => (
+                  <option key={customer.customerId} value={customer.customerId}>
+                    {customer.name} — saldo {formatMoneyCents(customer.balanceCents)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {fiadoExceedsLimit ? (
+              <p className="pos-error" role="alert">
+                Este fiado excede el límite de crédito de {selectedCustomer?.name} ({formatMoneyCents(selectedCustomer?.creditLimitCents ?? 0)}).
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
         <label className="pos-mixed-toggle">
           <input type="checkbox" checked={mixed} onChange={(event) => setMixed(event.target.checked)} />
           Pago mixto (efectivo + otro método)
@@ -386,8 +459,30 @@ function PaymentSheet({
               <select value={secondMethod} onChange={(event) => setSecondMethod(event.target.value as SalePaymentMethod)}>
                 <option value="TRANSFER">Transferencia</option>
                 <option value="CARD">Tarjeta</option>
+                <option value="FIADO">Fiado</option>
               </select>
             </label>
+          </div>
+        ) : null}
+
+        {mixed && secondMethod === "FIADO" ? (
+          <div className="pos-fiado-customer">
+            <label className="pos-field">
+              Cliente a fiado
+              <select value={customerId} onChange={(event) => setCustomerId(event.target.value)}>
+                <option value="">Seleccionar cliente…</option>
+                {customers.map((customer) => (
+                  <option key={customer.customerId} value={customer.customerId}>
+                    {customer.name} — saldo {formatMoneyCents(customer.balanceCents)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {fiadoExceedsLimit ? (
+              <p className="pos-error" role="alert">
+                Este fiado excede el límite de crédito de {selectedCustomer?.name} ({formatMoneyCents(selectedCustomer?.creditLimitCents ?? 0)}).
+              </p>
+            ) : null}
           </div>
         ) : null}
 
@@ -406,9 +501,9 @@ function PaymentSheet({
           <button
             type="button"
             className="pos-confirm"
-            disabled={!payments || submitting}
+            disabled={!canConfirm || submitting}
             onClick={() => {
-              if (payments) void onConfirm(payments);
+              if (payments) void onConfirm(payments, customerId || undefined);
             }}
           >
             {submitting ? "Registrando…" : syncing ? "Sincronizando…" : online ? "Confirmar venta" : "Guardar offline"}
@@ -418,3 +513,4 @@ function PaymentSheet({
     </div>
   );
 }
+

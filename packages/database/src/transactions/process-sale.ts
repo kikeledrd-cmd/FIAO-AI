@@ -1,6 +1,10 @@
-import { saleOperationPayloadSchema, type SaleOperationPayload } from "@fiao/contracts/sales";
+import { saleOperationPayloadSchema, type SaleOperationPayload, type SalePayment } from "@fiao/contracts/sales";
 import type { ClientOperationEnvelope, OperationResult } from "@fiao/contracts/sync";
 import type { CommandContext } from "@fiao/domain/context";
+import {
+  assertCreditLimit,
+  creditBalanceCents
+} from "@fiao/domain/credit/credit-policy";
 import {
   parseSaleQuantity,
   subtractDecimalQuantities,
@@ -39,6 +43,24 @@ export async function processSaleOperation(
   }
 
   const productIds = [...new Set(payload.lines.map((line) => line.productId))];
+
+  // Crédito: si hay pagos FIADO, debe existir cliente y respetar el límite.
+  const fiadoCents = fiadoTotalCents(payload.payments);
+  if (fiadoCents > 0 && payload.customerId === undefined) {
+    return persistRejectedOperation(context, envelope, "FIADO_REQUIRES_CUSTOMER", db);
+  }
+  const customerForCredit = fiadoCents > 0 ? await loadCustomerWithBalance(context, payload.customerId!, db) : null;
+  if (fiadoCents > 0 && customerForCredit === null) {
+    return persistRejectedOperation(context, envelope, "UNKNOWN_CUSTOMER", db);
+  }
+  if (fiadoCents > 0 && customerForCredit) {
+    try {
+      assertCreditLimit(customerForCredit.balanceCents, fiadoCents, customerForCredit.creditLimitCents);
+    } catch (error) {
+      return persistRejectedOperation(context, envelope, errorMessage(error), db);
+    }
+  }
+
   const products = await db.product.findMany({
     where: { id: { in: productIds }, ownerId: context.ownerId, branchId: context.branchId, active: true },
     select: { id: true, stockControl: true }
@@ -95,12 +117,26 @@ export async function processSaleOperation(
         select: { id: true }
       });
 
+      // Crédito: si hay pagos FIADO, resolver la PK interna del cliente para
+      // los FK (Sale.customerId y CreditMovement.customerId apuntan a Customer.id).
+      let customerPkId: string | null = null;
+      if (fiadoCents > 0 && payload.customerId) {
+        const customerRow = await tx.customer.findUnique({
+          where: { customerId: payload.customerId },
+          select: { id: true }
+        });
+        if (!customerRow) {
+          throw new Error("UNKNOWN_CUSTOMER");
+        }
+        customerPkId = customerRow.id;
+      }
+
       const sale = await tx.sale.create({
         data: {
           ownerId: context.ownerId,
           branchId: context.branchId,
           saleId: payload.saleId,
-          customerId: payload.customerId ?? null,
+          ...(customerPkId ? { customerId: customerPkId } : {}),
           actorUserId: context.userId,
           deviceId: context.deviceId,
           clientOperationId: operation.id,
@@ -112,6 +148,22 @@ export async function processSaleOperation(
         },
         select: { id: true, saleId: true }
       });
+
+      // Cargo de crédito si la venta incluye FIADO.
+      if (fiadoCents > 0 && customerForCredit && customerPkId) {
+        await tx.creditMovement.create({
+          data: {
+            ownerId: context.ownerId,
+            branchId: context.branchId,
+            customerId: customerPkId,
+            type: "FIAO_SALE",
+            amountCents: fiadoCents,
+            saleId: sale.id,
+            clientOperationId: operation.id,
+            occurredAt
+          }
+        });
+      }
 
       const productById = new Map(products.map((product) => [product.id, product]));
       for (const line of payload.lines) {
@@ -168,6 +220,28 @@ export async function processSaleOperation(
         select: { seq: true }
       });
 
+      // Replicar el cargo de crédito como delta CREDIT para los clientes.
+      if (fiadoCents > 0 && customerForCredit) {
+        await tx.syncChange.create({
+          data: {
+            ownerId: context.ownerId,
+            branchId: context.branchId,
+            clientOperationId: operation.id,
+            type: "CREDIT",
+            payload: {
+              movementId: crypto.randomUUID(),
+              type: "FIAO_SALE",
+              customerId: payload.customerId,
+              amountCents: fiadoCents,
+              saleId: payload.saleId,
+              abonoId: null,
+              occurredAt: occurredAt.toISOString()
+            }
+          },
+          select: { seq: true }
+        });
+      }
+
       const persistedResult = {
         operationId: envelope.operationId,
         status: "ACCEPTED" as const,
@@ -202,6 +276,27 @@ function saleChangePayload(payload: SaleOperationPayload, totals: { subtotalCent
     subtotalCents: totals.subtotalCents,
     totalCents: totals.totalCents
   };
+}
+
+function fiadoTotalCents(payments: SalePayment[]): number {
+  return payments.reduce((sum, payment) => (payment.method === "FIADO" ? sum + payment.amountCents : sum), 0);
+}
+
+async function loadCustomerWithBalance(
+  context: CommandContext,
+  customerId: string,
+  db: FiaoPrismaClient
+): Promise<{ creditLimitCents: number; balanceCents: number } | null> {
+  const customer = await db.customer.findUnique({
+    where: { customerId },
+    select: { id: true, creditLimitCents: true, ownerId: true, branchId: true }
+  });
+  if (!customer || customer.ownerId !== context.ownerId || customer.branchId !== context.branchId) return null;
+  const movements = await db.creditMovement.findMany({
+    where: { ownerId: context.ownerId, branchId: context.branchId, customerId: customer.id },
+    select: { type: true, amountCents: true }
+  });
+  return { creditLimitCents: customer.creditLimitCents, balanceCents: creditBalanceCents(movements) };
 }
 
 async function persistRejectedOperation(

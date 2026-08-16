@@ -48,6 +48,8 @@ model OwnerAccount {
   productStocks       ProductStock[]
   stockMovements      StockMovement[]
   sales               Sale[]
+  customers           Customer[]
+  creditMovements     CreditMovement[]
 }
 
 model Branch {
@@ -70,6 +72,8 @@ model Branch {
   productStocks       ProductStock[]
   stockMovements      StockMovement[]
   sales               Sale[]
+  customers           Customer[]
+  creditMovements     CreditMovement[]
 
   @@index([ownerId, active])
 }
@@ -204,6 +208,7 @@ model ClientOperation {
   conflicts       SyncConflict[]
   stockMovements  StockMovement[]
   sales           Sale[]
+  creditMovements CreditMovement[]
 
   @@unique([ownerId, operationId])
   @@index([ownerId, branchId, createdAt])
@@ -318,6 +323,53 @@ model Sale {
   actor             User             @relation("SaleActor", fields: [actorUserId], references: [id], onDelete: Restrict)
   device            Device           @relation(fields: [deviceId], references: [id], onDelete: Restrict)
   clientOperation   ClientOperation? @relation(fields: [clientOperationId], references: [id], onDelete: Restrict)
+  customer          Customer?        @relation("SaleCustomer", fields: [customerId], references: [id], onDelete: Restrict)
 
   @@index([ownerId, branchId, createdAt])
+}
+
+/// Cliente de una sucursal con límite de crédito. El saldo NUNCA se guarda
+/// como campo: se computa Σ movimientos de crédito (append-only).
+model Customer {
+  id                 String           @id @default(uuid()) @db.Uuid
+  ownerId            String           @db.Uuid
+  branchId           String           @db.Uuid
+  customerId         String           @unique @db.Uuid
+  name               String           @db.VarChar(120)
+  phoneE164          String?          @db.VarChar(16)
+  creditLimitCents   Int              @default(0)
+  defaultPromiseDays Int              @default(7)
+  active             Boolean          @default(true)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  owner              OwnerAccount     @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch             Branch           @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  movements          CreditMovement[]
+  sales              Sale[]           @relation("SaleCustomer")
+
+  @@index([ownerId, branchId, active])
+}
+
+/// Movimiento de crédito append-only (FIAO_SALE = cargo, ABONO = descargo).
+/// El saldo del cliente = Σ FIAO_SALE − Σ ABONO.
+model CreditMovement {
+  id                String          @id @default(uuid()) @db.Uuid
+  ownerId           String          @db.Uuid
+  branchId          String          @db.Uuid
+  customerId        String          @db.Uuid
+  type              String
+  amountCents       Int
+  saleId            String?         @db.Uuid
+  abonoId           String?         @db.Uuid
+  clientOperationId String?         @db.Uuid
+  occurredAt        DateTime
+  createdAt         DateTime        @default(now())
+  owner             OwnerAccount    @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch            Branch          @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  customer          Customer        @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  clientOperation   ClientOperation? @relation(fields: [clientOperationId], references: [id], onDelete: Restrict)
+
+  @@index([ownerId, branchId, customerId, createdAt])
+  @@index([clientOperationId])
+  @@unique([saleId, type])
 }

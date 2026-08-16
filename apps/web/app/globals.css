@@ -542,3 +542,57 @@ input { font-family: inherit; }
   font-size: 15px;
   font-weight: 800;
 }
+
+/* ===== Clientes (Task 12) ===== */
+.customers-screen { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.customers-actions { display: flex; justify-content: flex-end; }
+.customers-list { list-style: none; display: flex; flex-direction: column; gap: 10px; padding: 0; margin: 0; }
+.customers-item {
+  background: var(--fiao-card);
+  border: 1px solid var(--fiao-border);
+  border-radius: var(--fiao-radius-lg);
+  padding: 14px;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 12px;
+  align-items: center;
+}
+.customers-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.customers-info strong { color: var(--fiao-ink); font-size: 15px; }
+.customers-info span { font-size: 13px; color: var(--fiao-ink-muted); }
+.customers-info small { font-size: 12px; color: var(--fiao-primary-muted); }
+.customers-balance { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.customers-balance span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fiao-ink-muted); }
+.customers-balance strong { font-size: 15px; color: var(--fiao-primary); }
+.customers-balance strong.debt { color: #b3541e; }
+.customers-abono {
+  border: 1px solid var(--fiao-primary);
+  color: var(--fiao-primary);
+  background: transparent;
+  border-radius: var(--fiao-radius-pill);
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 800;
+}
+.customers-abono:disabled { opacity: 0.4; border-color: var(--fiao-border); color: var(--fiao-ink-muted); }
+.pos-fiado-customer { display: flex; flex-direction: column; gap: 6px; }
+.pos-fiado-customer select {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--fiao-border);
+  border-radius: var(--fiao-radius-md);
+  background: var(--fiao-cream);
+  color: var(--fiao-ink);
+  font-size: 15px;
+  font-family: inherit;
+}
+.pos-mixed-row select {
+  padding: 12px;
+  border: 1px solid var(--fiao-border);
+  border-radius: var(--fiao-radius-md);
+  background: var(--fiao-cream);
+  color: var(--fiao-ink);
+  font-size: 14px;
+  font-family: inherit;
+  width: 100%;
+}

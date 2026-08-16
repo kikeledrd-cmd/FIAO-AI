@@ -61,6 +61,32 @@ export interface CatalogRow {
   active: boolean;
 }
 
+/** Cliente local con saldo derivado (para fiar y abonar offline). */
+export interface LocalCustomerRow {
+  customerId: string;
+  ownerId: string;
+  branchId: string;
+  name: string;
+  phoneE164: string | null;
+  creditLimitCents: number;
+  defaultPromiseDays: number;
+  active: boolean;
+  balanceCents: number;
+}
+
+/** Movimiento de crédito local (deltas CREDIT aplicados por el sync). */
+export interface CreditMovementRow {
+  movementId: string;
+  ownerId: string;
+  branchId: string;
+  type: "FIAO_SALE" | "ABONO";
+  customerId: string;
+  amountCents: number;
+  saleId: string | null;
+  abonoId: string | null;
+  occurredAt: string;
+}
+
 export class FiaoOfflineDatabase extends Dexie {
   pendingOperations!: Table<PendingOperationRow, string>;
   syncMeta!: Table<SyncMetaRow, string>;
@@ -69,6 +95,8 @@ export class FiaoOfflineDatabase extends Dexie {
   users!: Table<LocalUserRow, string>;
   projectionRows!: Table<ProjectionRow, string>;
   catalog!: Table<CatalogRow, string>;
+  customers!: Table<LocalCustomerRow, string>;
+  creditMovements!: Table<CreditMovementRow, string>;
 
   constructor(name = "fiao-offline") {
     super(name);
@@ -88,6 +116,17 @@ export class FiaoOfflineDatabase extends Dexie {
       users: "&id, ownerId, role",
       projectionRows: "&key, ownerId, branchId, type, cursor",
       catalog: "&productId, ownerId, branchId, name, active"
+    });
+    this.version(3).stores({
+      pendingOperations: "&operationId, branchId, occurredAt, queuedAt",
+      syncMeta: "&branchId, ownerId",
+      syncConflicts: "&id, ownerId, operationId, branchId, kind, createdAt",
+      branches: "&id, ownerId",
+      users: "&id, ownerId, role",
+      projectionRows: "&key, ownerId, branchId, type, cursor",
+      catalog: "&productId, ownerId, branchId, name, active",
+      customers: "&customerId, ownerId, branchId, name, active",
+      creditMovements: "&movementId, ownerId, branchId, customerId, type, occurredAt"
     });
   }
 }

@@ -18,10 +18,10 @@ El roadmap técnico está en:
 
 El plan que se está ejecutando actualmente está en:
 
-`docs/superpowers/plans/2026-08-13-fiao-pos-sales.md`
+`docs/superpowers/plans/2026-08-13-fiao-credit-customers.md`
 
-> Plan 1 (foundation/sync/auth/PWA) completado; Task 11 (POS ventas) completada;
-> la siguiente tarea es Task 12 (fiado/credito/Clientes).
+> Plan 1 (foundation/sync/auth/PWA) completado; Tasks 11 (POS ventas) y 12
+> (fiado/clientes) completadas; la siguiente tarea es Task 13 (inventario admin / reversos).
 
 Si código y memoria conversacional difieren, primero revisar estos documentos y después el historial Git.
 
@@ -120,27 +120,36 @@ Requisitos principales:
 
 ### Siguiente tarea (Plan 2)
 
-**Task 11: POS — módulo de ventas (Vender).**
+**Task 12: Fiado y clientes (Credit).**
 
 > ✅ **COMPLETADA 2026-08-16.** Verificación completa pasó en esta máquina
-> (Node 22 + PostgreSQL 18 en Docker): `lint` (0 errores), `typecheck`, `test` (63),
-> `test:integration` (20), `build` y `test:e2e` (4/4 en Chromium móvil).
+> (Node 22 + PostgreSQL 18 en Docker): `lint` (0 errores), `typecheck`, `test` (84),
+> `test:integration` (30), `build` y `test:e2e` (7/7 en Chromium móvil).
 > Notas de ejecución:
 >
-> - dominio: `packages/contracts/src/sales.ts` (Zod) + `packages/domain/src/sales/sale-policy.ts`
->   (montos en centavos, cantidades decimales fijas, pagos mixtos CASH/TRANSFER/CARD);
-> - persistencia: modelos `Product`/`ProductStock`/`StockMovement`/`Sale` + migración
->   `commerce_sales`; `process-sale.ts` procesa `SALE` idempotente (append-only,
->   REJECTED persistido con `errorCode`); despacho en `process-operation.ts`;
-> - sync: `SALE` en `ALL_OPERATION_TYPES`, `reduceSaleChange` en el reducer local,
->   `GET /api/catalog` branch-scoped + tabla Dexie `catalog` v2 (vender offline);
-> - UI: `/sell` touch-first (`features/sales/sales-screen.tsx` + `receipt.tsx`),
->   carrito, búsqueda, cantidades, cobro mixto, encola `SALE` → sync → recibo;
-> - seed: 10 productos demo por sucursal (20 total) incl. ítem sin stock (recarga);
-> - **bug corregido:** el schema Zod del push solo admitía `NOOP`; ahora usa
->   `z.enum(ALL_OPERATION_TYPES)` (sin esto, toda venta offline fallaba con
->   `INVALID_REQUEST` al sincronizar);
-> - orden de verificación igual que Task 10: integración → re-seed → build → E2E.
+> - dominio: `contracts/credit.ts` (Customer/Abono/movimientos Zod) +
+>   `domain/credit/credit-policy.ts` (saldo Σ movimientos, límite, FIAO Score v1
+>   explicable: base 100, penaliza abonos tardíos);
+> - persistencia: modelos `Customer`/`CreditMovement` (append-only) + migración
+>   `commerce_credit`; procesadores `process-customer.ts` (upsert idempotente),
+>   `process-abono.ts` y extensión de `process-sale.ts` (método FIADO valida
+>   cliente + límite, crea cargo FIAO_SALE); despacho en `process-operation.ts`;
+> - sync: `CUSTOMER_UPSERT`/`ABONO` en `ALL_OPERATION_TYPES`;
+>   `reduceCustomerChange`/`reduceCreditChange`; `GET /api/customers`
+>   branch-scoped; Dexie v3 (`customers` + `creditMovements`); el sync client
+>   aplica deltas CUSTOMER/CREDIT a la réplica local;
+> - UI: `/customers` (lista con saldo, nuevo cliente, abono con modal),
+>   `PaymentSheet` con botón **Fiado** (puro o mixto) y selector de cliente con
+>   aviso de límite excedido, card Clientes en home;
+> - seed: 3 clientes por sucursal (ids únicos por branch) + saldo inicial de
+>   RD$800 para Doña María; el seed es ahora **totalmente idempotente**
+>   (limpia el historial comercial del dueño demo entre corridas E2E);
+> - bugs reales cazados por tests: FK de `Sale`/`CreditMovement` apuntan a la
+>   PK interna de `Customer` (no al `customerId` público); `process-abono`
+>   consultaba el saldo por el id público → `ABONO_EXCEEDS_BALANCE` falso;
+> - E2E `credit-flow.spec.ts`: venta a fiado (saldo 800→825), abono (275→75),
+>   creación de cliente con sync; el `Set-Content` de PowerShell corrompe
+>   UTF-8 — reescribir specs E2E con la herramienta `write`.
 
 ## 4. Reglas de arquitectura
 

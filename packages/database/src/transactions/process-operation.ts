@@ -10,6 +10,8 @@ import {
 } from "@fiao/sync/operation";
 import { databaseClient, type FiaoPrismaClient } from "../client";
 import { SyncRepository } from "../repositories/sync-repository";
+import { processAbonoOperation } from "./process-abono";
+import { processCustomerUpsert } from "./process-customer";
 import { processSaleOperation } from "./process-sale";
 
 export async function processOperation(
@@ -20,6 +22,8 @@ export async function processOperation(
   assertOperationScope(context, envelope);
   if (isCommerceOperationType(envelope.type)) {
     if (envelope.type === "SALE") return processSaleOperation(context, envelope, db);
+    if (envelope.type === "CUSTOMER_UPSERT") return processCustomerUpsert(context, envelope, db);
+    if (envelope.type === "ABONO") return processAbonoOperation(context, envelope, db);
   }
   if (!isFoundationOperationType(envelope.type)) throw new Error("UNKNOWN_OPERATION_TYPE");
 

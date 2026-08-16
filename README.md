@@ -22,11 +22,12 @@ El producto funcional **FIAO MVP V1** está definido y la implementación técni
 - **Seed demo (Task 10)**: tenant determinista (dueño/cajero + sucursales Los Mina/Invivienda), migración inicial versionada y verificación E2E completa en Chromium móvil (login, offline shell, reconexión).
 - **Branding oficial**: tokens `--fiao-*` (verde #123D32, lima #B8F23D, crema #F6F1E7), logo SVG (símbolo F + wordmark con A sin travesaño), Montserrat Variable self-hosted, tagline "Vende. Fía. Cobra. Controla.".
 - **POS ventas (Task 11)**: `/sell` touch-first con carrito, búsqueda, cantidades decimales, cobro en efectivo/transferencia/tarjeta/mixto, recibo interno; catálogo por sucursal (`GET /api/catalog`) cachead en Dexie para vender offline; `SALE` como operación idempotente del sync (append-only, stock reconstruido desde `StockMovement`); seed con 10 productos demo por sucursal.
+- **Fiado y clientes (Task 12)**: clientes con límite de crédito por sucursal, ventas a fiado (puras o mixtas) desde el POS con selector de cliente, abonos desde `/customers`; saldo computado Σ movimientos append-only (`CreditMovement`), nunca persistido; FIAO Score v1 explicable; `CUSTOMER_UPSERT`/`ABONO` como operaciones idempotentes; réplica local Dexie v3 para fiar y abonar offline.
 - Documentación completa del Blueprint, roadmap, handoff y runbook local.
 
 ### Próxima tarea
 
-**Task 12 — Fiado y clientes (Plan 2):** clientes con crédito, ventas a fiado, FIAO Score y cobranza. Ver `docs/AI_HANDOFF.md`.
+**Task 13 — Inventario y reversos (Plan 2):** ajustes de stock con autorización de OWNER, devoluciones/anulaciones con trazabilidad. Ver `docs/AI_HANDOFF.md`.
 
 ## Documentación obligatoria
 
