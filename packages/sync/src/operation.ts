@@ -4,8 +4,18 @@ import type { CommandContext } from "@fiao/domain/context";
 export const FOUNDATION_OPERATION_TYPES = ["NOOP"] as const;
 export type FoundationOperationType = (typeof FOUNDATION_OPERATION_TYPES)[number];
 
+export const COMMERCE_OPERATION_TYPES = ["SALE"] as const;
+export type CommerceOperationType = (typeof COMMERCE_OPERATION_TYPES)[number];
+
+export const ALL_OPERATION_TYPES = [...FOUNDATION_OPERATION_TYPES, ...COMMERCE_OPERATION_TYPES] as const;
+export type AllOperationType = (typeof ALL_OPERATION_TYPES)[number];
+
 export function isFoundationOperationType(type: string): type is FoundationOperationType {
   return (FOUNDATION_OPERATION_TYPES as readonly string[]).includes(type);
+}
+
+export function isCommerceOperationType(type: string): type is CommerceOperationType {
+  return (COMMERCE_OPERATION_TYPES as readonly string[]).includes(type);
 }
 
 export function assertOperationScope(context: CommandContext, envelope: ClientOperationEnvelope): void {

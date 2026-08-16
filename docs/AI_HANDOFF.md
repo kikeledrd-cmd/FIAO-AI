@@ -1,6 +1,6 @@
 # FIAO AI — AI Handoff
 
-Fecha de corte: **2026-08-15**
+Fecha de corte: **2026-08-16**
 
 ## 1. Objetivo del proyecto
 
@@ -18,7 +18,10 @@ El roadmap técnico está en:
 
 El plan que se está ejecutando actualmente está en:
 
-`docs/superpowers/plans/2026-08-13-fiao-foundation-sync-auth.md`
+`docs/superpowers/plans/2026-08-13-fiao-pos-sales.md`
+
+> Plan 1 (foundation/sync/auth/PWA) completado; Task 11 (POS ventas) completada;
+> la siguiente tarea es Task 12 (fiado/credito/Clientes).
 
 Si código y memoria conversacional difieren, primero revisar estos documentos y después el historial Git.
 
@@ -118,6 +121,26 @@ Requisitos principales:
 ### Siguiente tarea (Plan 2)
 
 **Task 11: POS — módulo de ventas (Vender).**
+
+> ✅ **COMPLETADA 2026-08-16.** Verificación completa pasó en esta máquina
+> (Node 22 + PostgreSQL 18 en Docker): `lint` (0 errores), `typecheck`, `test` (63),
+> `test:integration` (20), `build` y `test:e2e` (4/4 en Chromium móvil).
+> Notas de ejecución:
+>
+> - dominio: `packages/contracts/src/sales.ts` (Zod) + `packages/domain/src/sales/sale-policy.ts`
+>   (montos en centavos, cantidades decimales fijas, pagos mixtos CASH/TRANSFER/CARD);
+> - persistencia: modelos `Product`/`ProductStock`/`StockMovement`/`Sale` + migración
+>   `commerce_sales`; `process-sale.ts` procesa `SALE` idempotente (append-only,
+>   REJECTED persistido con `errorCode`); despacho en `process-operation.ts`;
+> - sync: `SALE` en `ALL_OPERATION_TYPES`, `reduceSaleChange` en el reducer local,
+>   `GET /api/catalog` branch-scoped + tabla Dexie `catalog` v2 (vender offline);
+> - UI: `/sell` touch-first (`features/sales/sales-screen.tsx` + `receipt.tsx`),
+>   carrito, búsqueda, cantidades, cobro mixto, encola `SALE` → sync → recibo;
+> - seed: 10 productos demo por sucursal (20 total) incl. ítem sin stock (recarga);
+> - **bug corregido:** el schema Zod del push solo admitía `NOOP`; ahora usa
+>   `z.enum(ALL_OPERATION_TYPES)` (sin esto, toda venta offline fallaba con
+>   `INVALID_REQUEST` al sincronizar);
+> - orden de verificación igual que Task 10: integración → re-seed → build → E2E.
 
 ## 4. Reglas de arquitectura
 

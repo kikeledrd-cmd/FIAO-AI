@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import type { Route } from "next";
 import { useAppShell } from "@/components/app-shell";
 import { useSync } from "@/features/sync/sync-provider";
 
@@ -8,8 +10,8 @@ const ROLE_LABEL = {
   CASHIER: "Cajero"
 } as const;
 
-const PLAN2_MODULES = [
-  { key: "sell", label: "Vender", hint: "POS rápido" },
+const PLAN2_MODULES: { key: string; label: string; hint: string; href?: Route }[] = [
+  { key: "sell", label: "Vender", hint: "POS rápido", href: "/sell" },
   { key: "fiao", label: "Fiao", hint: "Fiado y abonos" },
   { key: "customers", label: "Clientes", hint: "Cuentas y límites" },
   { key: "inventory", label: "Inventario", hint: "Productos y stock" },
@@ -53,13 +55,20 @@ export function HomeScreen() {
 
       <section aria-label="Módulos">
         <ul className="module-grid">
-          {PLAN2_MODULES.map((module) => (
-            <li key={module.key} className="module-card">
-              <h2>{module.label}</h2>
-              <p>{module.hint}</p>
-              <span>Próximamente</span>
-            </li>
-          ))}
+          {PLAN2_MODULES.map((module) => {
+            const content = (
+              <>
+                <h2>{module.label}</h2>
+                <p>{module.hint}</p>
+                <span>{module.href ? "Listo" : "Próximamente"}</span>
+              </>
+            );
+            return (
+              <li key={module.key} className="module-card">
+                {module.href ? <Link href={module.href}>{content}</Link> : content}
+              </li>
+            );
+          })}
         </ul>
       </section>
     </div>

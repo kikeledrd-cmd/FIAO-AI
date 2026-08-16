@@ -1,26 +1,52 @@
+import type { SyncChangeRecord } from "@fiao/contracts/sync";
 import { describe, expect, it } from "vitest";
-import { reduceFoundationChange } from "./local-reducer";
+import { reduceChange, reduceSaleChange } from "./local-reducer";
 
-const change = {
-  cursor: "10",
-  ownerId: "22222222-2222-4222-8222-222222222222",
-  branchId: "33333333-3333-4333-8333-333333333333",
-  type: "NOOP",
-  payload: { operationId: "11111111-1111-4111-8111-111111111111", type: "NOOP" },
-  createdAt: "2026-08-13T20:00:00.000Z"
+const baseChange: SyncChangeRecord = {
+  cursor: "42",
+  ownerId: "30000000-0000-4000-8000-000000000001",
+  branchId: "10000000-0000-4000-8000-000000000001",
+  type: "SALE",
+  payload: {
+    saleId: "40000000-0000-4000-8000-000000000001",
+    lines: [{ productId: "50000000-0000-4000-8000-000000000001", quantity: "2", priceCents: 5500 }],
+    payments: [{ method: "CASH", amountCents: 11000 }],
+    subtotalCents: 11000,
+    totalCents: 11000
+  },
+  createdAt: "2026-08-16T12:00:00.000Z"
 };
 
-describe("reduceFoundationChange", () => {
-  it("creates a stable branch-scoped projection row", () => {
-    expect(reduceFoundationChange(change)).toMatchObject({
-      key: `${change.ownerId}:${change.branchId}:NOOP:${change.payload.operationId}`,
-      ownerId: change.ownerId,
-      branchId: change.branchId,
-      cursor: "10"
-    });
+describe("reduceSaleChange", () => {
+  it("projects a SALE change keyed by owner/branch/saleId", () => {
+    const row = reduceSaleChange(baseChange);
+    expect(row.key).toBe(
+      "30000000-0000-4000-8000-000000000001:10000000-0000-4000-8000-000000000001:SALE:40000000-0000-4000-8000-000000000001"
+    );
+    expect(row.type).toBe("SALE");
+    expect(row.cursor).toBe("42");
+    expect(row.payload).toEqual(baseChange.payload);
   });
 
-  it("rejects malformed foundation payloads", () => {
-    expect(() => reduceFoundationChange({ ...change, payload: {} })).toThrow("INVALID_SYNC_CHANGE_PAYLOAD");
+  it("rejects malformed SALE payloads", () => {
+    expect(() => reduceSaleChange({ ...baseChange, payload: { nope: true } })).toThrow("INVALID_SYNC_CHANGE_PAYLOAD");
+    expect(() => reduceSaleChange({ ...baseChange, type: "NOOP" })).toThrow("UNKNOWN_SYNC_CHANGE_TYPE");
+  });
+});
+
+describe("reduceChange", () => {
+  it("dispatches by change type", () => {
+    expect(reduceChange(baseChange).type).toBe("SALE");
+    expect(
+      reduceChange({
+        ...baseChange,
+        type: "NOOP",
+        payload: { operationId: "40000000-0000-4000-8000-000000000002" }
+      }).type
+    ).toBe("NOOP");
+  });
+
+  it("rejects unknown types", () => {
+    expect(() => reduceChange({ ...baseChange, type: "FROBNICATE" })).toThrow("UNKNOWN_SYNC_CHANGE_TYPE");
   });
 });

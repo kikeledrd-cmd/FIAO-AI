@@ -9,6 +9,8 @@ import { SyncProvider } from "@/features/sync/sync-provider";
 
 export interface AppShellUser {
   id: string;
+  ownerId: string;
+  deviceId: string;
   name: string;
   role: "OWNER" | "CASHIER";
 }

@@ -50,6 +50,39 @@ export class TestFactory {
       data: { ownerId, userId, label }
     });
   }
+
+  async createProduct(branch: { ownerId: string; id: string }, overrides: Partial<{
+    name: string;
+    barcode: string | null;
+    priceCents: number;
+    stockControl: boolean;
+    unitLabel: string;
+    onHand: string;
+  }> = {}) {
+    const { onHand = "10", ...data } = overrides;
+    return this.db.$transaction(async (tx) => {
+      const product = await tx.product.create({
+        data: {
+          ownerId: branch.ownerId,
+          branchId: branch.id,
+          name: data.name ?? `Producto ${crypto.randomUUID().slice(0, 8)}`,
+          barcode: data.barcode ?? null,
+          priceCents: data.priceCents ?? 5000,
+          stockControl: data.stockControl ?? true,
+          unitLabel: data.unitLabel ?? "und"
+        }
+      });
+      await tx.productStock.create({
+        data: {
+          ownerId: branch.ownerId,
+          branchId: branch.id,
+          productId: product.id,
+          onHand
+        }
+      });
+      return product;
+    });
+  }
 }
 
 function randomSevenDigits(): string {

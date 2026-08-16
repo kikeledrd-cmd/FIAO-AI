@@ -1,4 +1,5 @@
 export { AuthRepository } from "./repositories/auth-repository";
+export { CatalogRepository } from "./repositories/catalog-repository";
 export { databaseClient } from "./client";
 export type { FiaoPrismaClient } from "./client";
 export type {
@@ -14,3 +15,4 @@ export type {
 export { SyncRepository } from "./repositories/sync-repository";
 export type { PullChangesResult } from "./repositories/sync-repository";
 export { processOperation } from "./transactions/process-operation";
+export { processSaleOperation } from "./transactions/process-sale";

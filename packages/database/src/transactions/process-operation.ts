@@ -2,6 +2,7 @@ import type { ClientOperationEnvelope, OperationResult } from "@fiao/contracts/s
 import type { CommandContext } from "@fiao/domain/context";
 import {
   assertOperationScope,
+  isCommerceOperationType,
   isFoundationOperationType,
   normalizeJsonPayload,
   parseCursor,
@@ -9,6 +10,7 @@ import {
 } from "@fiao/sync/operation";
 import { databaseClient, type FiaoPrismaClient } from "../client";
 import { SyncRepository } from "../repositories/sync-repository";
+import { processSaleOperation } from "./process-sale";
 
 export async function processOperation(
   context: CommandContext,
@@ -16,6 +18,9 @@ export async function processOperation(
   db: FiaoPrismaClient = databaseClient
 ): Promise<OperationResult> {
   assertOperationScope(context, envelope);
+  if (isCommerceOperationType(envelope.type)) {
+    if (envelope.type === "SALE") return processSaleOperation(context, envelope, db);
+  }
   if (!isFoundationOperationType(envelope.type)) throw new Error("UNKNOWN_OPERATION_TYPE");
 
   const occurredAt = parseOperationTimestamp(envelope.occurredAt);

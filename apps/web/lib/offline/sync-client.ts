@@ -2,6 +2,7 @@ import type { ClientOperationEnvelope, OperationResult, SyncChangeRecord } from 
 import { ApiError, apiJson } from "@/lib/api/client";
 import { FiaoOfflineDatabase, offlineDb } from "./db";
 import { applySyncChanges, listPendingOperations, markOperationResult } from "./queue";
+import { adjustLocalStock } from "./catalog";
 
 export interface SyncSummary {
   pushed: number;
@@ -81,6 +82,7 @@ export function createSyncClient(options?: {
           assertPullScope(response.changes, branchId, expectedOwnerId);
           assertCursorProgress(cursor, response.nextCursor, response.hasMore);
           await applySyncChanges(response.changes, database);
+          await applySaleDeltasToLocalCatalog(response.changes, database);
           pulled += response.changes.length;
           cursor = response.nextCursor;
           if (!response.hasMore) break;
@@ -137,6 +139,22 @@ function assertPullScope(changes: SyncChangeRecord[], branchId: string, ownerId:
     if (change.branchId !== branchId) throw new Error("SYNC_BRANCH_SCOPE_MISMATCH");
     if (ownerId !== undefined && change.ownerId !== ownerId) throw new Error("SYNC_OWNER_SCOPE_MISMATCH");
   }
+}
+
+async function applySaleDeltasToLocalCatalog(
+  changes: SyncChangeRecord[],
+  database: FiaoOfflineDatabase
+): Promise<void> {
+  const deltas: { productId: string; quantity: string }[] = [];
+  for (const change of changes) {
+    if (change.type !== "SALE") continue;
+    const payload = change.payload as { lines?: { productId: string; quantity: string }[] };
+    for (const line of payload.lines ?? []) {
+      deltas.push({ productId: line.productId, quantity: line.quantity });
+    }
+  }
+  if (deltas.length === 0) return;
+  await adjustLocalStock(changes[0]!.branchId, deltas, database);
 }
 
 async function recordSyncError(

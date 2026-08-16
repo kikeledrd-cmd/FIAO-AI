@@ -2,12 +2,12 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { AuthRepository } from "@fiao/database";
 import { AppShell } from "@/components/app-shell";
-import { HomeScreen } from "@/features/home/home-screen";
+import { SalesScreen } from "@/features/sales/sales-screen";
 import { ACTIVE_BRANCH_COOKIE_NAME, requireSession } from "@/lib/session/current-session";
 
 export const dynamic = "force-dynamic";
 
-export default async function HomePage() {
+export default async function SellPage() {
   let session;
   try {
     session = await requireSession();
@@ -31,7 +31,7 @@ export default async function HomePage() {
       branches={context.branches}
       activeBranchId={activeBranch.id}
     >
-      <HomeScreen />
+      <SalesScreen />
     </AppShell>
   );
 }

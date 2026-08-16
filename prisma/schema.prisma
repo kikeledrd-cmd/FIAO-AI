@@ -44,6 +44,10 @@ model OwnerAccount {
   clientOperations    ClientOperation[]
   syncChanges         SyncChange[]
   syncConflicts       SyncConflict[]
+  products            Product[]
+  productStocks       ProductStock[]
+  stockMovements      StockMovement[]
+  sales               Sale[]
 }
 
 model Branch {
@@ -62,6 +66,10 @@ model Branch {
   clientOperations    ClientOperation[]
   syncChanges         SyncChange[]
   syncConflicts       SyncConflict[]
+  products            Product[]
+  productStocks       ProductStock[]
+  stockMovements      StockMovement[]
+  sales               Sale[]
 
   @@index([ownerId, active])
 }
@@ -83,6 +91,7 @@ model User {
   authorizationsIssued OwnerAuthorization[] @relation("OwnerAuthorizationAuthorizer")
   auditEvents          AuditEvent[]         @relation("AuditActor")
   clientOperations     ClientOperation[]    @relation("OperationActor")
+  sales                Sale[]               @relation("SaleActor")
 
   @@index([ownerId, role, active])
 }
@@ -112,6 +121,7 @@ model Device {
   sessions         Session[]
   auditEvents      AuditEvent[]
   clientOperations ClientOperation[]
+  sales            Sale[]
 
   @@index([ownerId, userId, active])
 }
@@ -192,6 +202,8 @@ model ClientOperation {
   device          Device          @relation(fields: [deviceId], references: [id], onDelete: Restrict)
   syncChanges     SyncChange[]
   conflicts       SyncConflict[]
+  stockMovements  StockMovement[]
+  sales           Sale[]
 
   @@unique([ownerId, operationId])
   @@index([ownerId, branchId, createdAt])
@@ -228,4 +240,84 @@ model SyncConflict {
 
   @@index([ownerId, branchId, status, createdAt])
   @@index([clientOperationId])
+}
+
+/// Catálogo de productos por sucursal. El precio vive en centavos.
+model Product {
+  id           String          @id @default(uuid()) @db.Uuid
+  ownerId      String          @db.Uuid
+  branchId     String          @db.Uuid
+  name         String          @db.VarChar(120)
+  barcode      String?         @db.VarChar(64)
+  priceCents   Int
+  stockControl Boolean         @default(true)
+  unitLabel    String          @default("und") @db.VarChar(16)
+  active       Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  owner        OwnerAccount    @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch       Branch          @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  stock        ProductStock?
+  movements    StockMovement[]
+
+  @@unique([branchId, barcode])
+  @@index([ownerId, branchId, active])
+}
+
+/// Proyección de stock a la mano (cantidad decimal fija como string).
+model ProductStock {
+  id        String  @id @default(uuid()) @db.Uuid
+  ownerId   String  @db.Uuid
+  branchId  String  @db.Uuid
+  productId String  @unique @db.Uuid
+  onHand    String  @default("0")
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  owner     OwnerAccount @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch    Branch  @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  @@index([ownerId, branchId])
+}
+
+/// Movimiento de stock append-only (nunca se borra; se corrige con reversos).
+model StockMovement {
+  id                String          @id @default(uuid()) @db.Uuid
+  ownerId           String          @db.Uuid
+  branchId          String          @db.Uuid
+  productId         String          @db.Uuid
+  type              String
+  quantityDelta     String          @db.VarChar(32)
+  clientOperationId String?         @db.Uuid
+  createdAt         DateTime        @default(now())
+  owner             OwnerAccount    @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch            Branch          @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  product           Product         @relation(fields: [productId], references: [id], onDelete: Restrict)
+  clientOperation     ClientOperation? @relation(fields: [clientOperationId], references: [id], onDelete: Restrict)
+
+  @@index([ownerId, branchId, productId, createdAt])
+  @@index([clientOperationId])
+}
+
+/// Venta append-only. Líneas/pagos/totales se persisten como JSONB inmutable.
+model Sale {
+  id                String           @id @default(uuid()) @db.Uuid
+  ownerId           String           @db.Uuid
+  branchId          String           @db.Uuid
+  saleId            String           @unique @db.Uuid
+  customerId        String?          @db.Uuid
+  actorUserId       String           @db.Uuid
+  deviceId          String           @db.Uuid
+  clientOperationId String?          @db.Uuid
+  lines             Json
+  payments          Json
+  subtotalCents     Int
+  totalCents        Int
+  occurredAt        DateTime
+  createdAt         DateTime         @default(now())
+  owner             OwnerAccount     @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch            Branch           @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  actor             User             @relation("SaleActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  device            Device           @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  clientOperation   ClientOperation? @relation(fields: [clientOperationId], references: [id], onDelete: Restrict)
+
+  @@index([ownerId, branchId, createdAt])
 }

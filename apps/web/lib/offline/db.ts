@@ -47,6 +47,20 @@ export interface ProjectionRow {
   payload: unknown;
 }
 
+/** Réplica local del catálogo de una sucursal (para vender offline). */
+export interface CatalogRow {
+  productId: string;
+  ownerId: string;
+  branchId: string;
+  name: string;
+  barcode: string | null;
+  priceCents: number;
+  stockControl: boolean;
+  unitLabel: string;
+  onHand: string | null;
+  active: boolean;
+}
+
 export class FiaoOfflineDatabase extends Dexie {
   pendingOperations!: Table<PendingOperationRow, string>;
   syncMeta!: Table<SyncMetaRow, string>;
@@ -54,6 +68,7 @@ export class FiaoOfflineDatabase extends Dexie {
   branches!: Table<LocalBranchRow, string>;
   users!: Table<LocalUserRow, string>;
   projectionRows!: Table<ProjectionRow, string>;
+  catalog!: Table<CatalogRow, string>;
 
   constructor(name = "fiao-offline") {
     super(name);
@@ -64,6 +79,15 @@ export class FiaoOfflineDatabase extends Dexie {
       branches: "&id, ownerId",
       users: "&id, ownerId, role",
       projectionRows: "&key, ownerId, branchId, type, cursor"
+    });
+    this.version(2).stores({
+      pendingOperations: "&operationId, branchId, occurredAt, queuedAt",
+      syncMeta: "&branchId, ownerId",
+      syncConflicts: "&id, ownerId, operationId, branchId, kind, createdAt",
+      branches: "&id, ownerId",
+      users: "&id, ownerId, role",
+      projectionRows: "&key, ownerId, branchId, type, cursor",
+      catalog: "&productId, ownerId, branchId, name, active"
     });
   }
 }

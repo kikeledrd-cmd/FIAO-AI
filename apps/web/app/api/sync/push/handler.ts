@@ -1,7 +1,7 @@
 import type { ClientOperationEnvelope, OperationResult } from "@fiao/contracts/sync";
 import type { CommandContext } from "@fiao/domain/context";
 import { processOperation as processPersistedOperation, SyncRepository } from "@fiao/database";
-import { assertOperationScope, parseCursor } from "@fiao/sync/operation";
+import { assertOperationScope, parseCursor, ALL_OPERATION_TYPES } from "@fiao/sync/operation";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireBranchContext, SessionRequiredError } from "@/lib/session/current-session";
@@ -19,7 +19,7 @@ const cursor = z.string().regex(/^\d+$/).refine((value) => {
 }).nullable();
 const operationSchema = z.object({
   operationId: uuid,
-  type: z.literal("NOOP"),
+  type: z.enum(ALL_OPERATION_TYPES),
   ownerId: uuid,
   branchId: uuid,
   actorUserId: uuid,

@@ -1,5 +1,5 @@
 import type { ClientOperationEnvelope, OperationResult, SyncChangeRecord } from "@fiao/contracts/sync";
-import { reduceFoundationChange } from "@fiao/sync/local-reducer";
+import { reduceChange } from "@fiao/sync/local-reducer";
 import { FiaoOfflineDatabase, offlineDb, type PendingOperationRow, type SyncConflictRow } from "./db";
 
 export interface EnqueueOperationInput<TPayload = unknown> {
@@ -71,7 +71,7 @@ export async function applySyncChanges(
   await database.transaction("rw", database.projectionRows, database.syncMeta, async () => {
     const latestByBranch = new Map<string, { ownerId: string; cursor: string }>();
     for (const change of changes) {
-      const row = reduceFoundationChange(change);
+      const row = reduceChange(change);
       await database.projectionRows.put(row);
       const previous = latestByBranch.get(change.branchId);
       if (previous && previous.ownerId !== change.ownerId) throw new Error("OFFLINE_OWNER_SCOPE_MISMATCH");
