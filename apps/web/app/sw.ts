@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 import type { PrecacheEntry, SerwistGlobalConfig } from "serwist";
-import { NetworkOnly, Serwist } from "serwist";
+import { ExpirationPlugin, NetworkFirst, NetworkOnly, Serwist } from "serwist";
 import { defaultCache } from "@serwist/next/worker";
 
 declare global {
@@ -25,6 +25,17 @@ const serwist = new Serwist({
     {
       matcher: ({ url }) => url.pathname.startsWith("/api/"),
       handler: new NetworkOnly({ networkTimeoutSeconds: 10 })
+    },
+    // App shell: cache the HTML of same-origin navigations once seen online so
+    // the shell (header, branch, sync status) still renders offline. Data stays
+    // server-backed; this only covers the page document.
+    {
+      matcher: ({ request, sameOrigin }) => sameOrigin && request.mode === "navigate",
+      handler: new NetworkFirst({
+        cacheName: "fiao-shell",
+        networkTimeoutSeconds: 5,
+        plugins: [new ExpirationPlugin({ maxEntries: 16, maxAgeSeconds: 7 * 24 * 3600 })]
+      })
     },
     ...defaultCache
   ]

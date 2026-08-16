@@ -1,18 +1,19 @@
 import type { Metadata, Viewport } from "next";
+import { FIAO_BRAND } from "@/lib/branding";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "FIAO",
-  description: "Tu colmado, bajo control.",
+  title: FIAO_BRAND.name,
+  description: FIAO_BRAND.description,
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "FIAO"
+    title: FIAO_BRAND.name
   }
 };
 
 export const viewport: Viewport = {
-  themeColor: "#161a17",
+  themeColor: FIAO_BRAND.colors.primary,
   width: "device-width",
   initialScale: 1
 };

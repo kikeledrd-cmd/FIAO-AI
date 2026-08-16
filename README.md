@@ -19,14 +19,13 @@ El producto funcional **FIAO MVP V1** está definido y la implementación técni
 - Cola de operaciones offline owner-scoped.
 - Sync client con conflictos explícitos y cursores seguros.
 - **PWA shell (Task 9)**: manifest instalable, service worker Serwist, app shell mobile-first con selector de sucursal, estado de red, estado de sync, contador de pendientes/conflictos y home foundation con módulos de Plan 2.
-- Seed demo determinista (dueño + cajero + 2 sucursales).
+- **Seed demo (Task 10)**: tenant determinista (dueño/cajero + sucursales Los Mina/Invivienda), migración inicial versionada y verificación E2E completa en Chromium móvil (login, offline shell, reconexión).
+- **Branding oficial**: tokens `--fiao-*` (verde #123D32, lima #B8F23D, crema #F6F1E7), logo SVG (símbolo F + wordmark con A sin travesaño), Montserrat Variable self-hosted, tagline "Vende. Fía. Cobra. Controla.".
 - Documentación completa del Blueprint, roadmap, handoff y runbook local.
 
 ### Próxima tarea
 
-**Task 10 — Seed oficial + verificación E2E completa del flujo foundation.**
-
-El seed mínimo ya existe (`prisma/seed.ts`) y el E2E de la PWA (`apps/web/e2e/auth-and-offline.spec.ts`) está escrito; falta ejecutar la verificación E2E completa contra PostgreSQL y Playwright en el entorno objetivo.
+**Task 11 — POS: módulo de ventas (Plan 2).** Pantalla de venta touch-first sobre la cola offline existente, con reducers de dominio y branding oficial. Ver `docs/AI_HANDOFF.md`.
 
 ## Documentación obligatoria
 

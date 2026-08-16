@@ -3,6 +3,7 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BranchSwitcher, type BranchOption } from "@/components/branch-switcher";
+import { BrandLogo } from "@/components/brand-logo";
 import { SyncStatus } from "@/components/sync-status";
 import { SyncProvider } from "@/features/sync/sync-provider";
 
@@ -82,7 +83,9 @@ export function AppShell({
       <SyncProvider branchId={activeBranch}>
         <div className="app-shell">
           <header className="app-header">
-            <div className="app-brand">FIAO</div>
+            <div className="app-brand">
+              <BrandLogo size={30} />
+            </div>
             <BranchSwitcher
               branches={branches}
               activeBranchId={activeBranch}

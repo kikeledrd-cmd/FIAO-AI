@@ -100,6 +100,25 @@ Requisitos principales:
 - `docs/runbooks/local-development.md` ya creado;
 - ejecutar la verificación completa (`lint/typecheck/test/integration/build/E2E`) en un entorno Node 24 con PostgreSQL.
 
+> ✅ **COMPLETADA 2026-08-16.** La verificación completa pasó en esta máquina
+> (Node 22 + PostgreSQL 18 en Docker): `lint`, `typecheck`, `test` (45),
+> `test:integration` (13), `build` y `test:e2e` (2/2 en Chromium móvil).
+> Notas de ejecución:
+>
+> - migración inicial creada con `prisma migrate dev` (`prisma/migrations/*_init`);
+> - el seed vive en `prisma.config.ts` (`migrations.seed`) — Prisma 7 ya no
+>   lee el bloque `prisma` de `package.json`;
+> - la suite de integración comparte la base y hace `TRUNCATE ... CASCADE`
+>   (archivos en serie: `fileParallelism: false`); **hay que re-seedear después**
+>   de `test:integration` y antes de `test:e2e`;
+> - el SW sirve el shell offline (`fiao-shell` NetworkFirst) y el E2E valida
+>   página viva + recarga offline;
+> - en Windows con PostgreSQL nativo en 5432, el contenedor se publica en 5433.
+
+### Siguiente tarea (Plan 2)
+
+**Task 11: POS — módulo de ventas (Vender).**
+
 ## 4. Reglas de arquitectura
 
 ### Escrituras

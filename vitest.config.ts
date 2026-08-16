@@ -44,7 +44,10 @@ export default defineConfig({
           include: ["**/*.integration.test.ts", "**/*.integration.test.tsx"],
           environment: "node",
           testTimeout: 30_000,
-          hookTimeout: 30_000
+          hookTimeout: 30_000,
+          // La suite comparte una sola base de datos: un archivo a la vez
+          // para evitar deadlocks entre TRUNCATEs concurrentes.
+          fileParallelism: false
         },
         resolve: {
           alias: {

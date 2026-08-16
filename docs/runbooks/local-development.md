@@ -23,6 +23,10 @@ pnpm dev
 
 La app queda en <http://localhost:3000>.
 
+> **Nota (Windows con PostgreSQL nativo):** si la máquina ya tiene un PostgreSQL
+> instalado escuchando en `5432`, el contenedor se publica en el puerto **5433**
+> (ver `docker-compose.yml`) y el `.env` apunta a `localhost:5433`.
+
 ## Credenciales del seed de desarrollo
 
 El seed crea un tenant demo determinista (solo con `NODE_ENV !== "production"`):
@@ -41,6 +45,7 @@ pnpm typecheck
 pnpm test          # unit + component (sin DB)
 pnpm test:integration   # requiere PostgreSQL arriba
 pnpm --filter @fiao/web build
+pnpm db:seed       # re-seed DESPUÉS de la integración (TRUNCATE la pisa)
 pnpm test:e2e      # build de producción + Playwright (requiere DB + seed)
 ```
 
@@ -48,12 +53,22 @@ Los tests E2E corren contra `next build && next start` porque el service
 worker de producción es el que permite el shell offline; en modo `dev` Serwist
 usa `NetworkOnly` para todo.
 
+> La suite de integración comparte la base y hace `TRUNCATE ... CASCADE` al
+> empezar (los archivos corren en serie, `fileParallelism: false`), así que
+> **hay que re-seedear después** de `test:integration` y antes de `test:e2e`.
+> Los tests E2E asumen que el SW ya sirve el shell: el flujo offline valida la
+> página viva (estado `Sin conexión`) y la recarga servida por el SW.
+
 ## Base de datos
 
-- Servicio: `docker compose up -d postgres` (PostgreSQL 18, puerto 5432)
-- URL: `postgresql://fiao:***@localhost:5432/fiao_dev` (ver `.env.example`)
+- Servicio: `docker compose up -d postgres` (PostgreSQL 18, puerto 5433 si 5432 está ocupado)
+- URL: ver `.env.example` (puerto 5432 o 5433 según la máquina)
 - Migraciones: `pnpm prisma migrate dev`
 - Schema: `prisma/schema.prisma` (cliente generado en `packages/database/generated`)
+- Seed configurado en `prisma.config.ts` (`migrations.seed: "tsx prisma/seed.ts"`)
+
+> **Nota:** el seed vive en `prisma.config.ts` (Prisma 7 ya no lee el bloque
+> `prisma` de `package.json`).
 
 ## PWA / offline en desarrollo
 
@@ -62,6 +77,17 @@ usa `NetworkOnly` para todo.
 - Config: `apps/web/next.config.ts` (`@serwist/next`)
 - El SW **nunca** cachea `/api/*`: las operaciones offline van por Dexie
   (`apps/web/lib/offline`) y el sync client (`POST /api/sync/push`).
+- El SW cachea el HTML de las navegaciones (`fiao-shell`, NetworkFirst) para
+  que el shell siga renderizando sin conexión; los datos mutables siguen
+  viniendo del servidor vía Dexie + sync.
+
+### Branding oficial
+
+- Tokens en `apps/web/app/globals.css` (`--fiao-*`) y `apps/web/lib/branding.ts`.
+- Logo SVG en `apps/web/components/brand-logo.tsx` (símbolo F + wordmark con
+  la A sin travesaño) e ícono PWA en `apps/web/public/icons/icon.svg`.
+- Fuente: Montserrat Variable (`@fontsource-variable/montserrat`, self-hosted
+  para funcionar offline).
 
 ### Limpiar datos locales de Dexie (desarrollo)
 

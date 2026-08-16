@@ -1,20 +1,15 @@
 import type { MetadataRoute } from "next";
-
-export const FIAO_BRANDING = {
-  name: "FIAO",
-  shortName: "FIAO",
-  description: "Tu colmado, bajo control."
-} as const;
+import { FIAO_BRAND } from "@/lib/branding";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: FIAO_BRANDING.name,
-    short_name: FIAO_BRANDING.shortName,
-    description: FIAO_BRANDING.description,
+    name: FIAO_BRAND.name,
+    short_name: FIAO_BRAND.name,
+    description: FIAO_BRAND.description,
     start_url: "/",
     display: "standalone",
-    background_color: "#f7f8f7",
-    theme_color: "#161a17",
+    background_color: FIAO_BRAND.colors.background,
+    theme_color: FIAO_BRAND.colors.primary,
     orientation: "portrait",
     icons: [
       {

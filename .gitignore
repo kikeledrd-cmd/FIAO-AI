@@ -11,3 +11,5 @@ packages/database/generated/
 
 # TypeScript incremental build info
 *.tsbuildinfo
+
+.openclaw/

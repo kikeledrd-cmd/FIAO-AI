@@ -3,21 +3,24 @@
 import { useSync } from "@/features/sync/sync-provider";
 
 const label = {
-  SYNCED: "Todo sincronizado",
-  PENDING: "Movimientos pendientes",
-  ERROR: "Error de sincronización",
-  CONFLICT: "Revisión requerida"
+  SYNCED: "Sincronizado",
+  PENDING: "Pendientes",
+  ERROR: "Error",
+  CONFLICT: "Revisar"
 } as const;
 
 export function SyncStatus() {
   const { status, pending, conflicts, syncing, sync } = useSync();
+  const tone =
+    status === "CONFLICT" ? "sync-conflict" : status === "PENDING" || status === "ERROR" ? "sync-pending" : "";
   return (
-    <div aria-live="polite">
+    <div className={`sync-status ${tone} ${syncing ? "sync-busy" : ""}`} aria-live="polite">
+      <span className="sync-dot" aria-hidden="true" />
       <span>{syncing ? "Sincronizando…" : label[status]}</span>
-      {pending > 0 ? <span>{pending} pendientes</span> : null}
-      {conflicts > 0 ? <span>{conflicts} en revisión</span> : null}
-      <button type="button" onClick={() => void sync()} disabled={syncing}>
-        Sincronizar
+      {pending > 0 ? <span>{pending}</span> : null}
+      {conflicts > 0 ? <span>{conflicts} ⚠</span> : null}
+      <button type="button" className="sync-resync" onClick={() => void sync()} disabled={syncing}>
+        Sync
       </button>
     </div>
   );

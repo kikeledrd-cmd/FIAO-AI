@@ -69,8 +69,8 @@ export function LoginForm() {
           required
         />
       </label>
-      {error ? <p role="alert">{error}</p> : null}
-      <button type="submit" disabled={submitting}>
+      {error ? <p role="alert" className="auth-error">{error}</p> : null}
+      <button type="submit" className="auth-submit" disabled={submitting}>
         {submitting ? "Entrando…" : "Entrar a FIAO"}
       </button>
     </form>

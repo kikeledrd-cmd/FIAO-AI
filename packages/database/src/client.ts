@@ -5,7 +5,7 @@ import { PrismaClient } from "../generated/prisma/client";
 loadEnv({ path: new URL("../../../.env", import.meta.url) });
 loadEnv();
 
-const DEVELOPMENT_DATABASE_URL = "postgresql://fiao:fiao_dev@localhost:5432/fiao_dev";
+const DEVELOPMENT_DATABASE_URL = "postgresql://fiao:fiao_dev@localhost:5433/fiao_dev";
 
 function databaseUrl(): string {
   const configured = process.env.DATABASE_URL;

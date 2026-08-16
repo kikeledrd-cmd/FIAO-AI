@@ -852,7 +852,11 @@ git commit -m "feat: add FIAO mobile PWA shell"
 - Seed creates deterministic fixture owner, two branches, one owner user, one cashier assigned to one branch, and registered demo devices.
 - No real phone numbers or credentials appear in production seed path.
 
-- [ ] **Step 1: Write E2E acceptance flow**
+- [x] **Step 1: Write E2E acceptance flow**
+
+> El flujo quedó cubierto por `apps/web/e2e/auth-and-offline.spec.ts`
+> (login → scope → shell offline → reconexión → sync manual), verificado en
+> Chromium móvil (Pixel 7) contra `next build && next start`.
 
 ```ts
 test("foundation flow: login, scope, offline queue, reconnect", async ({ page, context }) => {
@@ -872,11 +876,11 @@ test("foundation flow: login, scope, offline queue, reconnect", async ({ page, c
 
 The debug/noop operation UI exists only in development/test builds and must be excluded from production navigation.
 
-- [ ] **Step 2: Implement deterministic seed**
+- [x] **Step 2: Implement deterministic seed**
 
 Seed PINs only from environment variables or development defaults guarded by `NODE_ENV !== "production"`.
 
-- [ ] **Step 3: Document local start sequence**
+- [x] **Step 3: Document local start sequence**
 
 `docs/runbooks/local-development.md` must include exact commands:
 
@@ -892,7 +896,12 @@ pnpm dev
 
 Also document test commands and how to clear local Dexie data for development.
 
-- [ ] **Step 4: Run full verification**
+- [x] **Step 4: Run full verification**
+
+> ✅ Pasó completo: lint (0 errores), typecheck, test (45), test:integration (13),
+> build de producción y test:e2e (2/2). Notas: seed configurado en
+> `prisma.config.ts` (Prisma 7); re-seed entre integración y E2E; puerto 5433
+> si hay PostgreSQL nativo en 5432.
 
 Run:
 
@@ -907,12 +916,16 @@ pnpm test:e2e
 
 Expected: all PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add prisma/seed.ts apps/web/e2e/foundation-flow.spec.ts docs/runbooks/local-development.md package.json
 git commit -m "test: verify FIAO foundation flow"
 ```
+
+> Ejecutado el 2026-08-16 junto con el branding oficial y los fixes de
+> infraestructura (migración init, seed en prisma.config.ts, TRUNCATE CASCADE,
+> SW shell offline).
 
 ## Plan 1 completion checklist
 

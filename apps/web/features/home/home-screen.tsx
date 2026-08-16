@@ -44,9 +44,11 @@ export function HomeScreen() {
                   ? `${conflicts} movimiento${conflicts === 1 ? "" : "s"} requieren revisión`
                   : "Error de sincronización"}
         </p>
-        <button type="button" onClick={() => void sync()} disabled={syncing}>
-          Sincronizar
-        </button>
+        <div className="home-sync-row">
+          <button type="button" className="home-resync" onClick={() => void sync()} disabled={syncing}>
+            {syncing ? "Sincronizando…" : "Sincronizar ahora"}
+          </button>
+        </div>
       </section>
 
       <section aria-label="Módulos">

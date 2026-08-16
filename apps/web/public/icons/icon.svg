@@ -1,5 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="FIAO">
-  <rect width="512" height="512" rx="96" fill="#161a17" />
-  <rect x="96" y="96" width="320" height="320" rx="72" fill="#1e6b46" />
-  <text x="256" y="330" font-family="Arial, Helvetica, sans-serif" font-size="240" font-weight="800" fill="#ffffff" text-anchor="middle">F</text>
+  <!-- Squircle con fondo verde bosque oficial -->
+  <rect width="512" height="512" rx="124" fill="#123D32" />
+  <!-- Símbolo F: tallo curvo a la izquierda en la base -->
+  <path d="M176 96 C176 224 176 288 128 352" stroke="#FFFFFF" stroke-width="56" stroke-linecap="round" fill="none" />
+  <!-- Brazo superior con caída a la derecha -->
+  <path d="M176 144 L288 144 C320 144 336 160 336 192" stroke="#FFFFFF" stroke-width="56" stroke-linecap="round" fill="none" />
+  <!-- Brazo medio -->
+  <path d="M176 240 L256 240" stroke="#FFFFFF" stroke-width="56" stroke-linecap="round" fill="none" />
+  <!-- Pastillas lima en el contador inferior del símbolo -->
+  <rect x="176" y="288" width="56" height="28" rx="14" fill="#B8F23D" />
+  <rect x="176" y="332" width="56" height="28" rx="14" fill="#B8F23D" />
 </svg>

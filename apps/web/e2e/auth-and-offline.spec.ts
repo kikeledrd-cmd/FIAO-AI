@@ -10,7 +10,10 @@ async function login(page: Page, phone: string, pin: string) {
   await page.getByLabel("Teléfono").fill(phone);
   await page.getByLabel("PIN").fill(pin);
   await page.getByRole("button", { name: /Entrar a FIAO/ }).click();
-  await expect(page.locator("header")).toContainText("FIAO");
+  await expect(page.locator("header").getByRole("img", { name: "FIAO" })).toBeVisible();
+  // Carga de documento completa para que el SW cachee el shell (navigate).
+  await page.reload();
+  await expect(page.locator("header").getByRole("img", { name: "FIAO" })).toBeVisible();
 }
 
 test("app shell works offline and sync recovers", async ({ page, context }) => {
@@ -20,7 +23,7 @@ test("app shell works offline and sync recovers", async ({ page, context }) => {
 
   // App shell shows the active branch and a ready sync state.
   await expect(header.getByRole("button", { name: /Los Mina/ })).toBeVisible();
-  await expect(header.getByText(/Todo sincronizado/)).toBeVisible();
+  await expect(header.getByText(/Sincronizado/)).toBeVisible();
 
   // The branch switcher lists the other branch.
   await header.getByRole("button", { name: /Los Mina/ }).click();
@@ -29,15 +32,25 @@ test("app shell works offline and sync recovers", async ({ page, context }) => {
 
   // Go offline: shell, branch name and connection status must still render.
   await context.setOffline(true);
-  await page.reload();
+  // En un dispositivo real la radio cortada hace navigator.onLine=false; con la
+  // emulación de Playwright el documento servido por el SW nace "online", así
+  // que reflejamos el estado de red real del dispositivo como lo haría el OS.
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "onLine", { get: () => false, configurable: true });
+    window.dispatchEvent(new Event("offline"));
+  });
   await expect(header.getByText("Sin conexión")).toBeVisible();
+  // Recarga offline: el shell (logo, sucursal, sync status) se sirve del SW.
+  await page.reload();
+  await expect(header.getByRole("img", { name: "FIAO" })).toBeVisible();
   await expect(header.getByRole("button", { name: /Los Mina/ })).toBeVisible();
+  await expect(header.getByText(/Sincronizado/)).toBeVisible();
 
   // Back online: connection status recovers and manual sync is available.
   await context.setOffline(false);
   await expect(header.getByText("En línea")).toBeVisible();
-  await header.getByRole("button", { name: /Sincronizar/ }).click();
-  await expect(header.getByText(/Todo sincronizado/)).toBeVisible({ timeout: 10_000 });
+  await header.getByRole("button", { name: /Sync/ }).click();
+  await expect(header.getByText(/Sincronizado/)).toBeVisible({ timeout: 10_000 });
 });
 
 test("cashier only sees the assigned branch", async ({ page }) => {

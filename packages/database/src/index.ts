@@ -1,4 +1,6 @@
 export { AuthRepository } from "./repositories/auth-repository";
+export { databaseClient } from "./client";
+export type { FiaoPrismaClient } from "./client";
 export type {
   ActiveSessionRecord,
   BranchAccess,
