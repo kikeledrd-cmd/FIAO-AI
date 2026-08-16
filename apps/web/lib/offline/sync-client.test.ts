@@ -109,8 +109,7 @@ describe("sync client", () => {
     expect((await db.syncMeta.get(branchId))?.cursor).toBe("2");
   });
 
-  it("applies REVERSAL and STOCK_ADJUSTMENT deltas to the local catalog", async () => {
-    const productId = "55555555-5555-4555-8555-555555555555";
+  it("applies REVERSAL and STOCK_ADJUSTMENT deltas to the local catalog", async () => {    const productId = "55555555-5555-4555-8555-555555555555";
     await db.catalog.put({
       productId,
       ownerId,
@@ -168,5 +167,69 @@ describe("sync client", () => {
     expect(summary.pulled).toBe(2);
     const row = await db.catalog.get(productId);
     expect(row?.onHand).toBe("9"); // 8 + 2 (REVERSAL) − 1 (STOCK_ADJUSTMENT)
+  });
+
+  it("applies PURCHASE deltas (stock + cost) and SUPPLIER deltas to the local replica", async () => {
+    const productId = "55555555-5555-4555-8555-555555555555";
+    await db.catalog.put({
+      productId,
+      ownerId,
+      branchId,
+      name: "Arroz",
+      barcode: null,
+      priceCents: 11000,
+      costCents: 8000,
+      stockControl: true,
+      unitLabel: "und",
+      onHand: "10",
+      active: true
+    });
+    const transport: SyncTransport = {
+      push: vi.fn(async () => ({ results: [], cursor: "0" })),
+      pull: vi.fn(async () => ({
+        changes: [
+          {
+            cursor: "1",
+            ownerId,
+            branchId,
+            type: "PURCHASE",
+            payload: {
+              purchaseId: "99999999-9999-4999-8999-999999999999",
+              supplierId: null,
+              lines: [{ productId, quantity: "5", unitCostCents: 7000 }],
+              costAfter: [{ productId, costCents: 7750 }],
+              note: null,
+              totalCents: 35000,
+              occurredAt: new Date().toISOString()
+            },
+            createdAt: new Date().toISOString()
+          },
+          {
+            cursor: "2",
+            ownerId,
+            branchId,
+            type: "SUPPLIER",
+            payload: {
+              supplierId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              name: "Distribuidora La Vega",
+              phoneE164: "+18095551111",
+              active: true
+            },
+            createdAt: new Date().toISOString()
+          }
+        ],
+        nextCursor: "2",
+        hasMore: false
+      }))
+    };
+    const client = createSyncClient({ database: db, transport, sleep: async () => {} });
+    const summary = await client.syncNow(branchId);
+
+    expect(summary.pulled).toBe(2);
+    const row = await db.catalog.get(productId);
+    expect(row?.onHand).toBe("15");
+    expect(row?.costCents).toBe(7750);
+    const supplier = await db.suppliers.get("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+    expect(supplier?.name).toBe("Distribuidora La Vega");
   });
 });

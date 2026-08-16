@@ -55,6 +55,7 @@ export interface CatalogRow {
   name: string;
   barcode: string | null;
   priceCents: number;
+  costCents?: number;
   stockControl: boolean;
   unitLabel: string;
   onHand: string | null;
@@ -87,6 +88,16 @@ export interface CreditMovementRow {
   occurredAt: string;
 }
 
+/** Proveedor local (deltas SUPPLIER aplicados por el sync). */
+export interface LocalSupplierRow {
+  supplierId: string;
+  ownerId: string;
+  branchId: string;
+  name: string;
+  phoneE164: string | null;
+  active: boolean;
+}
+
 export class FiaoOfflineDatabase extends Dexie {
   pendingOperations!: Table<PendingOperationRow, string>;
   syncMeta!: Table<SyncMetaRow, string>;
@@ -97,6 +108,7 @@ export class FiaoOfflineDatabase extends Dexie {
   catalog!: Table<CatalogRow, string>;
   customers!: Table<LocalCustomerRow, string>;
   creditMovements!: Table<CreditMovementRow, string>;
+  suppliers!: Table<LocalSupplierRow, string>;
 
   constructor(name = "fiao-offline") {
     super(name);
@@ -127,6 +139,18 @@ export class FiaoOfflineDatabase extends Dexie {
       catalog: "&productId, ownerId, branchId, name, active",
       customers: "&customerId, ownerId, branchId, name, active",
       creditMovements: "&movementId, ownerId, branchId, customerId, type, occurredAt"
+    });
+    this.version(4).stores({
+      pendingOperations: "&operationId, branchId, occurredAt, queuedAt",
+      syncMeta: "&branchId, ownerId",
+      syncConflicts: "&id, ownerId, operationId, branchId, kind, createdAt",
+      branches: "&id, ownerId",
+      users: "&id, ownerId, role",
+      projectionRows: "&key, ownerId, branchId, type, cursor",
+      catalog: "&productId, ownerId, branchId, name, active",
+      customers: "&customerId, ownerId, branchId, name, active",
+      creditMovements: "&movementId, ownerId, branchId, customerId, type, occurredAt",
+      suppliers: "&supplierId, ownerId, branchId, name, active"
     });
   }
 }

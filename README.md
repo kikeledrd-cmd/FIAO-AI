@@ -24,11 +24,12 @@ El producto funcional **FIAO MVP V1** está definido y la implementación técni
 - **POS ventas (Task 11)**: `/sell` touch-first con carrito, búsqueda, cantidades decimales, cobro en efectivo/transferencia/tarjeta/mixto, recibo interno; catálogo por sucursal (`GET /api/catalog`) cachead en Dexie para vender offline; `SALE` como operación idempotente del sync (append-only, stock reconstruido desde `StockMovement`); seed con 10 productos demo por sucursal.
 - **Fiado y clientes (Task 12)**: clientes con límite de crédito por sucursal, ventas a fiado (puras o mixtas) desde el POS con selector de cliente, abonos desde `/customers`; saldo computado Σ movimientos append-only (`CreditMovement`), nunca persistido; FIAO Score v1 explicable; `CUSTOMER_UPSERT`/`ABONO` como operaciones idempotentes; réplica local Dexie v3 para fiar y abonar offline.
 - **Inventario y reversos (Task 13)**: `/inventory` con ajuste manual de stock (delta con signo + motivo) protegido por autorización de OWNER; botón **Anular venta** en el recibo del POS que revierte stock y saldo de fiado con trazabilidad; `POST /api/owner/authorize` emite `OwnerAuthorization` por PIN (TTL 5 min) ligada al `operationId`; `STOCK_ADJUSTMENT`/`SALE_REVERSAL` idempotentes y append-only; el sync client aplica los deltas a la réplica local.
+- **Compras y proveedores (Task 14)**: `/suppliers` (alta/edición con sync offline); modal **Registrar compra** en `/inventory` (proveedor opcional, líneas con cantidad y costo unitario, PIN del dueño si cajero); **costo promedio móvil determinístico** (`Product.costCents`) con aritmética entera; `Purchase`/`PurchaseLine`/`Supplier` append-only; `SUPPLIER_UPSERT`/`PURCHASE` idempotentes; Dexie v4 con `suppliers` y deltas PURCHASE (stock + costo) aplicados por el sync client.
 - Documentación completa del Blueprint, roadmap, handoff y runbook local.
 
 ### Próxima tarea
 
-**Task 14 — Compras y proveedores (Plan 2):** gestión de proveedores, compras y costo promedio móvil. Ver `docs/AI_HANDOFF.md`.
+**Task 15 — Caja (Plan 2):** apertura/cierre de caja, gastos, retiros, inyecciones y arqueo con diferencias. Ver `docs/AI_HANDOFF.md`.
 
 ## Documentación obligatoria
 

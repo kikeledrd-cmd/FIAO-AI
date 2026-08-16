@@ -4,9 +4,11 @@ import {
   reduceChange,
   reduceCreditChange,
   reduceCustomerChange,
+  reducePurchaseChange,
   reduceReversalChange,
   reduceSaleChange,
-  reduceStockAdjustmentChange
+  reduceStockAdjustmentChange,
+  reduceSupplierChange
 } from "./local-reducer";
 
 const baseChange: SyncChangeRecord = {
@@ -134,6 +136,51 @@ describe("reduceReversalChange", () => {
   });
 });
 
+describe("reduceSupplierChange", () => {
+  it("projects a SUPPLIER change keyed by supplierId", () => {
+    const row = reduceSupplierChange({
+      ...baseChange,
+      type: "SUPPLIER",
+      payload: {
+        supplierId: "a0000000-0000-4000-8000-000000000001",
+        name: "Distribuidora La Vega",
+        phoneE164: "+18095551111",
+        active: true
+      }
+    });
+    expect(row.key).toBe("30000000-0000-4000-8000-000000000001:10000000-0000-4000-8000-000000000001:SUPPLIER:a0000000-0000-4000-8000-000000000001");
+    expect(row.type).toBe("SUPPLIER");
+  });
+
+  it("rejects malformed SUPPLIER payloads", () => {
+    expect(() => reduceSupplierChange({ ...baseChange, type: "SUPPLIER", payload: {} })).toThrow("INVALID_SYNC_CHANGE_PAYLOAD");
+  });
+});
+
+describe("reducePurchaseChange", () => {
+  it("projects a PURCHASE change keyed by purchaseId", () => {
+    const row = reducePurchaseChange({
+      ...baseChange,
+      type: "PURCHASE",
+      payload: {
+        purchaseId: "b0000000-0000-4000-8000-000000000001",
+        supplierId: null,
+        lines: [{ productId: "50000000-0000-4000-8000-000000000001", quantity: "5", unitCostCents: 8000 }],
+        costAfter: [{ productId: "50000000-0000-4000-8000-000000000001", costCents: 8000 }],
+        note: null,
+        totalCents: 40000,
+        occurredAt: "2026-08-16T12:00:00.000Z"
+      }
+    });
+    expect(row.key).toBe("30000000-0000-4000-8000-000000000001:10000000-0000-4000-8000-000000000001:PURCHASE:b0000000-0000-4000-8000-000000000001");
+    expect(row.type).toBe("PURCHASE");
+  });
+
+  it("rejects malformed PURCHASE payloads", () => {
+    expect(() => reducePurchaseChange({ ...baseChange, type: "PURCHASE", payload: {} })).toThrow("INVALID_SYNC_CHANGE_PAYLOAD");
+  });
+});
+
 describe("reduceChange", () => {
   it("dispatches by change type", () => {
     expect(reduceChange(baseChange).type).toBe("SALE");
@@ -175,6 +222,20 @@ describe("reduceChange", () => {
         payload: { reversalId: "90000000-0000-4000-8000-000000000001", saleId: "40000000-0000-4000-8000-000000000001" }
       }).type
     ).toBe("REVERSAL");
+    expect(
+      reduceChange({
+        ...baseChange,
+        type: "SUPPLIER",
+        payload: { supplierId: "a0000000-0000-4000-8000-000000000001" }
+      }).type
+    ).toBe("SUPPLIER");
+    expect(
+      reduceChange({
+        ...baseChange,
+        type: "PURCHASE",
+        payload: { purchaseId: "b0000000-0000-4000-8000-000000000001" }
+      }).type
+    ).toBe("PURCHASE");
   });
 
   it("rejects unknown types", () => {

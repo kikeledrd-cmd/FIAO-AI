@@ -18,11 +18,12 @@ El roadmap técnico está en:
 
 El plan que se está ejecutando actualmente está en:
 
-`docs/superpowers/plans/2026-08-13-fiao-inventory-reversals.md`
+`docs/superpowers/plans/2026-08-13-fiao-purchasing-suppliers.md`
 
 > Plan 1 (foundation/sync/auth/PWA) completado; Tasks 11 (POS ventas), 12
-> (fiado/clientes) y 13 (inventario/reversos) completadas; la siguiente tarea
-> es Task 14 (compras/proveedores y costo promedio móvil).
+> (fiado/clientes), 13 (inventario/reversos) y 14 (compras/proveedores)
+> completadas; la siguiente tarea es Task 15 (caja: apertura/cierre, gastos y
+> arqueo).
 
 Si código y memoria conversacional difieren, primero revisar estos documentos y después el historial Git.
 
@@ -186,6 +187,38 @@ Requisitos principales:
 >   los campos clave (adjustmentId+productId, reversalId+saleId); las páginas
 >   protegidas nuevas deben renderizarse dentro de `AppShell` o el prerender
 >   falla con `APP_SHELL_REQUIRED`.
+
+### Siguiente tarea (Plan 2)
+
+**Task 14: Compras y proveedores.**
+
+> ✅ **COMPLETADA 2026-08-16.** Verificación completa pasó en esta máquina
+> (Node 22 + PostgreSQL 18 en Docker): `lint` (0 errores), `typecheck`,
+> `test` (117), `test:integration` (54), `build` y `test:e2e` (13/13 en
+> Chromium móvil).
+> Notas de ejecución:
+>
+> - dominio: `contracts/purchasing.ts` + `domain/purchasing/purchase-policy.ts`
+>   — `computeMovingAverageCost` determinístico con aritmética entera
+>   (cantidades en milésimas, costos en centavos, redondeo fijo
+>   half-away-from-zero; sin stock previo o costo 0 → la compra fija el costo);
+> - persistencia: migración `commerce_purchasing` con `Supplier`, `Purchase`,
+>   `PurchaseLine` (append-only) y `Product.costCents` (proyección);
+>   procesadores `process-supplier-upsert.ts` (datos maestros, sin
+>   autorización) y `process-purchase.ts` (exige OWNER o OwnerAuthorization
+>   purpose `PURCHASE`); `SupplierRepository.listByBranch` con estadísticas;
+> - sync: `SUPPLIER_UPSERT`/`PURCHASE` en `COMMERCE_OPERATION_TYPES`;
+>   `reduceSupplierChange`/`reducePurchaseChange`; Dexie v4 con `suppliers`;
+>   el sync client aplica PURCHASE (stock + costCents local) y SUPPLIER;
+> - UI: `/suppliers` (lista + crear con sync offline), modal **Registrar
+>   compra** en `/inventory` (proveedor opcional, líneas dinámicas, PIN del
+>   dueño si cajero), card Proveedores en home;
+> - E2E `purchasing-flow.spec.ts`: crear proveedor, compra +5 actualiza stock,
+>   cajero sin PIN rechazado;
+> - gotchas: el seed debía limpiar `purchaseLine/purchase/supplier` antes de
+>   `clientOperation` (nuevo FK Restrict); `parseSaleQuantity` rechaza "0" →
+>   manejo explícito en sumas de stock; los keys de los reducers deben
+>   incluir ownerId+branchId completos en los tests (sin elipsis).
 
 ## 4. Reglas de arquitectura
 

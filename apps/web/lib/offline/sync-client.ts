@@ -4,6 +4,7 @@ import { FiaoOfflineDatabase, offlineDb } from "./db";
 import { applySyncChanges, listPendingOperations, markOperationResult } from "./queue";
 import { applySignedStockDeltas, adjustLocalStock } from "./catalog";
 import { applyCreditDeltasLocally, upsertCustomersLocally } from "./customers";
+import { upsertSuppliersLocally } from "./suppliers";
 
 export interface SyncSummary {
   pushed: number;
@@ -85,8 +86,10 @@ export function createSyncClient(options?: {
           await applySyncChanges(response.changes, database);
           await applySaleDeltasToLocalCatalog(response.changes, database);
           await applyReversalDeltasToLocalCatalog(response.changes, database);
+          await applyPurchaseDeltasToLocalCatalog(response.changes, database);
           await applyCustomerDeltasLocally(response.changes, database);
           await applyCreditDeltasLocally(response.changes, database);
+          await upsertSuppliersLocally(response.changes, database);
           pulled += response.changes.length;
           cursor = response.nextCursor;
           if (!response.hasMore) break;
@@ -182,6 +185,50 @@ async function applyReversalDeltasToLocalCatalog(
   }
   if (deltas.length === 0) return;
   await applySignedStockDeltas(changes[0]!.branchId, deltas, database);
+}
+
+async function applyPurchaseDeltasToLocalCatalog(
+  changes: SyncChangeRecord[],
+  database: FiaoOfflineDatabase
+): Promise<void> {
+  const deltas: { productId: string; quantityDelta: string }[] = [];
+  const costEntries: { productId: string; costCents: number }[] = [];
+  for (const change of changes) {
+    if (change.type !== "PURCHASE") continue;
+    const payload = change.payload as { lines?: { productId: string; quantity: string }[]; costAfter?: { productId: string; costCents: number }[] };
+    for (const line of payload.lines ?? []) {
+      deltas.push({ productId: line.productId, quantityDelta: `+${line.quantity}` });
+    }
+    const costAfter = payload.costAfter;
+    if (costAfter) costEntries.push(...costAfter);
+  }
+  if (deltas.length === 0) return;
+  await database.transaction("rw", database.catalog, async () => {
+    for (const delta of deltas) {
+      const row = await database.catalog.get(delta.productId);
+      if (!row || !row.stockControl) continue;
+      row.onHand = addToQuantity(row.onHand ?? "0", delta.quantityDelta.slice(1));
+      const cost = costEntries.find((entry) => entry.productId === delta.productId);
+      if (cost) row.costCents = cost.costCents;
+      await database.catalog.put(row);
+    }
+  });
+}
+
+function addToQuantity(left: string, right: string): string {
+  if (/^0+(\.0+)?$/.test(left)) return right;
+  const leftParts = left.split(".");
+  const rightParts = right.split(".");
+  const wholeA = leftParts[0] ?? "0";
+  const fracA = leftParts[1] ?? "";
+  const wholeB = rightParts[0] ?? "0";
+  const fracB = rightParts[1] ?? "";
+  const scaledA = BigInt(wholeA) * 1000n + BigInt((fracA + "000").slice(0, 3));
+  const scaledB = BigInt(wholeB) * 1000n + BigInt((fracB + "000").slice(0, 3));
+  const total = scaledA + scaledB;
+  const whole = total / 1000n;
+  const fraction = (total % 1000n).toString().padStart(3, "0").replace(/0+$/, "");
+  return `${whole}${fraction ? `.${fraction}` : ""}`;
 }
 
 async function applyCustomerDeltasLocally(

@@ -42,6 +42,7 @@ export interface CatalogProduct {
   name: string;
   barcode: string | null;
   priceCents: number;
+  costCents?: number;
   stockControl: boolean;
   unitLabel: string;
   onHand: string | null;

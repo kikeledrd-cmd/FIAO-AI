@@ -115,6 +115,40 @@ export function reduceReversalChange(change: SyncChangeRecord): ProjectionRowVal
   };
 }
 
+export function reduceSupplierChange(change: SyncChangeRecord): ProjectionRowValue {
+  if (change.type !== "SUPPLIER") throw new Error("UNKNOWN_SYNC_CHANGE_TYPE");
+  const payload = asRecord(change.payload);
+  const supplierId = payload.supplierId;
+  if (typeof supplierId !== "string" || supplierId.length === 0) {
+    throw new Error("INVALID_SYNC_CHANGE_PAYLOAD");
+  }
+  return {
+    key: `${change.ownerId}:${change.branchId}:SUPPLIER:${supplierId}`,
+    ownerId: change.ownerId,
+    branchId: change.branchId,
+    type: change.type,
+    cursor: change.cursor,
+    payload: change.payload
+  };
+}
+
+export function reducePurchaseChange(change: SyncChangeRecord): ProjectionRowValue {
+  if (change.type !== "PURCHASE") throw new Error("UNKNOWN_SYNC_CHANGE_TYPE");
+  const payload = asRecord(change.payload);
+  const purchaseId = payload.purchaseId;
+  if (typeof purchaseId !== "string" || purchaseId.length === 0) {
+    throw new Error("INVALID_SYNC_CHANGE_PAYLOAD");
+  }
+  return {
+    key: `${change.ownerId}:${change.branchId}:PURCHASE:${purchaseId}`,
+    ownerId: change.ownerId,
+    branchId: change.branchId,
+    type: change.type,
+    cursor: change.cursor,
+    payload: change.payload
+  };
+}
+
 export function reduceChange(change: SyncChangeRecord): ProjectionRowValue {
   switch (change.type) {
     case "NOOP":
@@ -129,6 +163,10 @@ export function reduceChange(change: SyncChangeRecord): ProjectionRowValue {
       return reduceStockAdjustmentChange(change);
     case "REVERSAL":
       return reduceReversalChange(change);
+    case "SUPPLIER":
+      return reduceSupplierChange(change);
+    case "PURCHASE":
+      return reducePurchaseChange(change);
     default:
       throw new Error("UNKNOWN_SYNC_CHANGE_TYPE");
   }

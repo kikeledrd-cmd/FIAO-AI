@@ -50,6 +50,9 @@ model OwnerAccount {
   sales               Sale[]
   customers           Customer[]
   creditMovements     CreditMovement[]
+  suppliers           Supplier[]
+  purchases           Purchase[]
+  purchaseLines       PurchaseLine[]
 }
 
 model Branch {
@@ -74,6 +77,9 @@ model Branch {
   sales               Sale[]
   customers           Customer[]
   creditMovements     CreditMovement[]
+  suppliers           Supplier[]
+  purchases           Purchase[]
+  purchaseLines       PurchaseLine[]
 
   @@index([ownerId, active])
 }
@@ -209,6 +215,7 @@ model ClientOperation {
   stockMovements  StockMovement[]
   sales           Sale[]
   creditMovements CreditMovement[]
+  purchases       Purchase[]
 
   @@unique([ownerId, operationId])
   @@index([ownerId, branchId, createdAt])
@@ -255,6 +262,7 @@ model Product {
   name         String          @db.VarChar(120)
   barcode      String?         @db.VarChar(64)
   priceCents   Int
+  costCents    Int             @default(0)
   stockControl Boolean         @default(true)
   unitLabel    String          @default("und") @db.VarChar(16)
   active       Boolean         @default(true)
@@ -264,6 +272,7 @@ model Product {
   branch       Branch          @relation(fields: [branchId], references: [id], onDelete: Restrict)
   stock        ProductStock?
   movements    StockMovement[]
+  purchases    PurchaseLine[]
 
   @@unique([branchId, barcode])
   @@index([ownerId, branchId, active])
@@ -281,6 +290,67 @@ model ProductStock {
   branch    Branch  @relation(fields: [branchId], references: [id], onDelete: Restrict)
 
   @@index([ownerId, branchId])
+}
+
+/// Proveedor de una sucursal. Datos maestros; el histórico de compras vive
+/// en Purchase (append-only).
+model Supplier {
+  id          String          @id @default(uuid()) @db.Uuid
+  ownerId     String          @db.Uuid
+  branchId    String          @db.Uuid
+  supplierId  String          @unique @db.Uuid
+  name        String          @db.VarChar(120)
+  phoneE164   String?         @db.VarChar(16)
+  active      Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  owner       OwnerAccount    @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch      Branch          @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  purchases   Purchase[]
+
+  @@index([ownerId, branchId, active])
+}
+
+/// Compra a proveedor append-only. Por línea se registra cantidad y costo
+/// unitario; Product.costCents es la proyección del costo promedio móvil.
+model Purchase {
+  id                String          @id @default(uuid()) @db.Uuid
+  ownerId           String          @db.Uuid
+  branchId          String          @db.Uuid
+  purchaseId        String          @unique @db.Uuid
+  supplierId        String?         @db.Uuid
+  actorUserId       String          @db.Uuid
+  deviceId          String          @db.Uuid
+  clientOperationId String?         @db.Uuid
+  note              String?         @db.VarChar(300)
+  totalCents        Int
+  occurredAt        DateTime
+  createdAt         DateTime        @default(now())
+  owner             OwnerAccount    @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch            Branch          @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  supplier          Supplier?       @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  lines             PurchaseLine[]
+  clientOperation   ClientOperation? @relation(fields: [clientOperationId], references: [id], onDelete: Restrict)
+
+  @@index([ownerId, branchId, createdAt])
+}
+
+/// Línea de compra append-only (cantidad + costo unitario en centavos).
+model PurchaseLine {
+  id          String   @id @default(uuid()) @db.Uuid
+  ownerId     String   @db.Uuid
+  branchId    String   @db.Uuid
+  purchaseId  String   @db.Uuid
+  productId   String   @db.Uuid
+  quantity    String   @db.VarChar(32)
+  unitCostCents Int
+  lineTotalCents Int
+  purchase    Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  owner       OwnerAccount @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch      Branch   @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  @@index([ownerId, branchId, productId])
 }
 
 /// Movimiento de stock append-only (nunca se borra; se corrige con reversos).

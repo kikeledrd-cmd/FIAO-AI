@@ -8,7 +8,7 @@ export interface OwnerAuthorizationResult {
 /** Emite una OwnerAuthorization ligada a un operationId (TTL 5 min). */
 export async function requestOwnerAuthorization(input: {
   branchId: string;
-  purpose: "STOCK_ADJUSTMENT" | "SALE_REVERSAL";
+  purpose: "STOCK_ADJUSTMENT" | "SALE_REVERSAL" | "PURCHASE";
   targetOperationId: string;
   pin: string;
 }): Promise<OwnerAuthorizationResult> {

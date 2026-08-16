@@ -573,6 +573,9 @@ input { font-family: inherit; }
 .customers-info span { font-size: 13px; color: var(--fiao-ink-muted); }
 .customers-info small { font-size: 12px; color: var(--fiao-primary-muted); }
 .customers-balance { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.purchase-line { border: 1px solid var(--fiao-border); border-radius: var(--fiao-radius-lg); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.purchase-line-row { display: flex; gap: 10px; }
+.purchase-line-row .pos-field { flex: 1; }
 .customers-balance span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fiao-ink-muted); }
 .customers-balance strong { font-size: 15px; color: var(--fiao-primary); }
 .customers-balance strong.debt { color: #b3541e; }

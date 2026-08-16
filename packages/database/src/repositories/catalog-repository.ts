@@ -17,6 +17,7 @@ export class CatalogRepository {
       name: row.name,
       barcode: row.barcode,
       priceCents: row.priceCents,
+      costCents: row.costCents,
       stockControl: row.stockControl,
       unitLabel: row.unitLabel,
       onHand: row.stock?.onHand ?? null,
