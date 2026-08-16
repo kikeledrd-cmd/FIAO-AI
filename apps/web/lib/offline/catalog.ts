@@ -1,5 +1,5 @@
 import type { CatalogProduct } from "@fiao/contracts/sales";
-import { subtractDecimalQuantities } from "@fiao/domain/sales/sale-policy";
+import { addDecimalQuantities, subtractDecimalQuantities } from "@fiao/domain/sales/sale-policy";
 import { apiJson } from "@/lib/api/client";
 import { FiaoOfflineDatabase, offlineDb } from "./db";
 
@@ -67,6 +67,29 @@ export async function adjustLocalStock(
       const row = await database.catalog.get(delta.productId);
       if (!row || !row.stockControl) continue;
       row.onHand = subtractDecimalQuantities(row.onHand ?? "0", delta.quantity);
+      await database.catalog.put(row);
+    }
+  });
+}
+
+/**
+ * Aplica deltas de stock con signo ("5" suma, "-2" resta) a la réplica
+ * local. Usado por REVERSAL (restaura stock) y STOCK_ADJUSTMENT.
+ */
+export async function applySignedStockDeltas(
+  branchId: string,
+  deltas: { productId: string; quantityDelta: string }[],
+  database: FiaoOfflineDatabase = offlineDb
+): Promise<void> {
+  if (deltas.length === 0) return;
+  await database.transaction("rw", database.catalog, async () => {
+    for (const delta of deltas) {
+      const row = await database.catalog.get(delta.productId);
+      if (!row || !row.stockControl) continue;
+      const current = row.onHand ?? "0";
+      row.onHand = delta.quantityDelta.startsWith("-")
+        ? subtractDecimalQuantities(current, delta.quantityDelta.slice(1))
+        : addDecimalQuantities(current, delta.quantityDelta.replace(/^\+/, ""));
       await database.catalog.put(row);
     }
   });

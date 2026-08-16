@@ -79,6 +79,42 @@ export function reduceCreditChange(change: SyncChangeRecord): ProjectionRowValue
   };
 }
 
+export function reduceStockAdjustmentChange(change: SyncChangeRecord): ProjectionRowValue {
+  if (change.type !== "STOCK_ADJUSTMENT") throw new Error("UNKNOWN_SYNC_CHANGE_TYPE");
+  const payload = asRecord(change.payload);
+  const adjustmentId = payload.adjustmentId;
+  const productId = payload.productId;
+  if (typeof adjustmentId !== "string" || adjustmentId.length === 0 || typeof productId !== "string" || productId.length === 0) {
+    throw new Error("INVALID_SYNC_CHANGE_PAYLOAD");
+  }
+  return {
+    key: `${change.ownerId}:${change.branchId}:STOCK_ADJUSTMENT:${adjustmentId}`,
+    ownerId: change.ownerId,
+    branchId: change.branchId,
+    type: change.type,
+    cursor: change.cursor,
+    payload: change.payload
+  };
+}
+
+export function reduceReversalChange(change: SyncChangeRecord): ProjectionRowValue {
+  if (change.type !== "REVERSAL") throw new Error("UNKNOWN_SYNC_CHANGE_TYPE");
+  const payload = asRecord(change.payload);
+  const reversalId = payload.reversalId;
+  const saleId = payload.saleId;
+  if (typeof reversalId !== "string" || reversalId.length === 0 || typeof saleId !== "string" || saleId.length === 0) {
+    throw new Error("INVALID_SYNC_CHANGE_PAYLOAD");
+  }
+  return {
+    key: `${change.ownerId}:${change.branchId}:REVERSAL:${reversalId}`,
+    ownerId: change.ownerId,
+    branchId: change.branchId,
+    type: change.type,
+    cursor: change.cursor,
+    payload: change.payload
+  };
+}
+
 export function reduceChange(change: SyncChangeRecord): ProjectionRowValue {
   switch (change.type) {
     case "NOOP":
@@ -89,6 +125,10 @@ export function reduceChange(change: SyncChangeRecord): ProjectionRowValue {
       return reduceCustomerChange(change);
     case "CREDIT":
       return reduceCreditChange(change);
+    case "STOCK_ADJUSTMENT":
+      return reduceStockAdjustmentChange(change);
+    case "REVERSAL":
+      return reduceReversalChange(change);
     default:
       throw new Error("UNKNOWN_SYNC_CHANGE_TYPE");
   }

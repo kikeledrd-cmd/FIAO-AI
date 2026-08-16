@@ -2,7 +2,7 @@ import type { ClientOperationEnvelope, OperationResult, SyncChangeRecord } from 
 import { ApiError, apiJson } from "@/lib/api/client";
 import { FiaoOfflineDatabase, offlineDb } from "./db";
 import { applySyncChanges, listPendingOperations, markOperationResult } from "./queue";
-import { adjustLocalStock } from "./catalog";
+import { applySignedStockDeltas, adjustLocalStock } from "./catalog";
 import { applyCreditDeltasLocally, upsertCustomersLocally } from "./customers";
 
 export interface SyncSummary {
@@ -84,6 +84,7 @@ export function createSyncClient(options?: {
           assertCursorProgress(cursor, response.nextCursor, response.hasMore);
           await applySyncChanges(response.changes, database);
           await applySaleDeltasToLocalCatalog(response.changes, database);
+          await applyReversalDeltasToLocalCatalog(response.changes, database);
           await applyCustomerDeltasLocally(response.changes, database);
           await applyCreditDeltasLocally(response.changes, database);
           pulled += response.changes.length;
@@ -158,6 +159,29 @@ async function applySaleDeltasToLocalCatalog(
   }
   if (deltas.length === 0) return;
   await adjustLocalStock(changes[0]!.branchId, deltas, database);
+}
+
+async function applyReversalDeltasToLocalCatalog(
+  changes: SyncChangeRecord[],
+  database: FiaoOfflineDatabase
+): Promise<void> {
+  const deltas: { productId: string; quantityDelta: string }[] = [];
+  for (const change of changes) {
+    if (change.type === "REVERSAL") {
+      const payload = change.payload as { lines?: { productId: string; quantity: string }[] };
+      for (const line of payload.lines ?? []) {
+        deltas.push({ productId: line.productId, quantityDelta: `+${line.quantity}` });
+      }
+    }
+    if (change.type === "STOCK_ADJUSTMENT") {
+      const payload = change.payload as { productId?: string; quantityDelta?: string };
+      if (payload.productId && payload.quantityDelta) {
+        deltas.push({ productId: payload.productId, quantityDelta: payload.quantityDelta });
+      }
+    }
+  }
+  if (deltas.length === 0) return;
+  await applySignedStockDeltas(changes[0]!.branchId, deltas, database);
 }
 
 async function applyCustomerDeltasLocally(

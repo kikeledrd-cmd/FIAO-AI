@@ -64,7 +64,12 @@ vi.mock("@/lib/offline/catalog", () => ({
   listCatalogLocally: vi.fn().mockResolvedValue([]),
   loadCatalogFromServer: vi.fn().mockResolvedValue(hoisted.PRODUCTS),
   saveCatalogLocally: vi.fn().mockResolvedValue(undefined),
-  adjustLocalStock: vi.fn().mockResolvedValue(undefined)
+  adjustLocalStock: vi.fn().mockResolvedValue(undefined),
+  applySignedStockDeltas: vi.fn().mockResolvedValue(undefined)
+}));
+
+vi.mock("@/lib/offline/owner-authorize", () => ({
+  requestOwnerAuthorization: vi.fn().mockResolvedValue({ authorizationId: "auth-1", expiresAt: "2026-08-16T20:00:00.000Z" })
 }));
 
 vi.mock("@/lib/offline/customers", () => ({
@@ -136,6 +141,32 @@ describe("SalesScreen", () => {
 
     await waitFor(() => expect(screen.getByText("Venta registrada")).toBeInTheDocument());
     expect(screen.getByText("Efectivo")).toBeInTheDocument();
+  });
+
+  it("enqueues a SALE_REVERSAL with owner authorization when reversing from the receipt", async () => {
+    render(<SalesScreen />);
+    await waitFor(() => expect(screen.getByText("Arroz La Garza 5lb")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Arroz La Garza 5lb"));
+    fireEvent.click(screen.getByRole("button", { name: "Cobrar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar venta" }));
+    await waitFor(() => expect(screen.getByText("Venta registrada")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Anular venta" }));
+    const dialog = screen.getByRole("dialog", { name: "Anular venta" });
+    fireEvent.change(within(dialog).getByLabelText("Motivo de la anulación"), {
+      target: { value: "Cliente devolvió" }
+    });
+    fireEvent.change(within(dialog).getByLabelText("PIN del dueño"), {
+      target: { value: "1234" }
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Confirmar anulación" }));
+
+    await waitFor(() => expect(enqueueMock).toHaveBeenCalledTimes(2));
+    const reversal = enqueueMock.mock.calls[1]![0];
+    expect(reversal.type).toBe("SALE_REVERSAL");
+    expect(reversal.payload.reason).toBe("Cliente devolvió");
+    expect(reversal.payload.ownerAuthorizationId).toBe("auth-1");
+    expect(reversal.payload.saleId).toBeTypeOf("string");
   });
 
   it("enqueues a FIADO sale with customerId when fiado is selected", async () => {

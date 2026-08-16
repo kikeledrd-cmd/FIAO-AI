@@ -13,6 +13,8 @@ import { SyncRepository } from "../repositories/sync-repository";
 import { processAbonoOperation } from "./process-abono";
 import { processCustomerUpsert } from "./process-customer";
 import { processSaleOperation } from "./process-sale";
+import { processSaleReversal } from "./process-sale-reversal";
+import { processStockAdjustment } from "./process-stock-adjustment";
 
 export async function processOperation(
   context: CommandContext,
@@ -24,6 +26,8 @@ export async function processOperation(
     if (envelope.type === "SALE") return processSaleOperation(context, envelope, db);
     if (envelope.type === "CUSTOMER_UPSERT") return processCustomerUpsert(context, envelope, db);
     if (envelope.type === "ABONO") return processAbonoOperation(context, envelope, db);
+    if (envelope.type === "STOCK_ADJUSTMENT") return processStockAdjustment(context, envelope, db);
+    if (envelope.type === "SALE_REVERSAL") return processSaleReversal(context, envelope, db);
   }
   if (!isFoundationOperationType(envelope.type)) throw new Error("UNKNOWN_OPERATION_TYPE");
 

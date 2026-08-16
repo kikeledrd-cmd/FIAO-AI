@@ -10,11 +10,11 @@ const ROLE_LABEL = {
   CASHIER: "Cajero"
 } as const;
 
-const PLAN2_MODULES: { key: string; label: string; hint: string; href?: Route }[] = [
+const PLAN2_MODULES: { key: string; label: string; hint: string; href?: string }[] = [
   { key: "sell", label: "Vender", hint: "POS rápido", href: "/sell" },
   { key: "customers", label: "Clientes", hint: "Fiado y abonos", href: "/customers" },
   { key: "fiao", label: "Fiao", hint: "Fiado y abonos" },
-  { key: "inventory", label: "Inventario", hint: "Productos y stock" },
+  { key: "inventory", label: "Inventario", hint: "Productos y stock", href: "/inventory" },
   { key: "cash", label: "Caja", hint: "Apertura y cierre" }
 ] as const;
 
@@ -65,7 +65,7 @@ export function HomeScreen() {
             );
             return (
               <li key={module.key} className="module-card">
-                {module.href ? <Link href={module.href}>{content}</Link> : content}
+                {module.href ? <Link href={module.href as Route}>{content}</Link> : content}
               </li>
             );
           })}

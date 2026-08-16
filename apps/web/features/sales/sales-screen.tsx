@@ -13,7 +13,9 @@ import {
   saveCatalogLocally
 } from "@/lib/offline/catalog";
 import { listCustomersLocally, loadCustomersFromServer, saveCustomersLocally, type CustomerWithBalance } from "@/lib/offline/customers";
+import { requestOwnerAuthorization } from "@/lib/offline/owner-authorize";
 import { syncNow } from "@/lib/offline/sync-client";
+import { applySignedStockDeltas } from "@/lib/offline/catalog";
 import { ReceiptView } from "./receipt";
 
 export function formatMoneyCents(cents: number): string {
@@ -45,7 +47,15 @@ export function SalesScreen() {
   const [query, setQuery] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [paying, setPaying] = useState(false);
-  const [receipt, setReceipt] = useState<{ saleId: string; totalCents: number; methodLabel: string } | null>(null);
+  const [receipt, setReceipt] = useState<{
+    saleId: string;
+    totalCents: number;
+    methodLabel: string;
+    lines: { productId: string; quantity: string }[];
+    fiadoCents: number;
+    customerId?: string;
+  } | null>(null);
+  const [reversing, setReversing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const branchName = branches.find((branch) => branch.id === activeBranchId)?.name ?? "Sucursal";
@@ -212,7 +222,14 @@ export function SalesScreen() {
           )
         );
       }
-      setReceipt({ saleId, totalCents, methodLabel });
+      setReceipt({
+        saleId,
+        totalCents,
+        methodLabel,
+        lines: lines.map((line) => ({ productId: line.productId, quantity: line.quantity })),
+        fiadoCents,
+        ...(customerId ? { customerId } : {})
+      });
       setCart([]);
       setPaying(false);
       void sync();
@@ -221,14 +238,95 @@ export function SalesScreen() {
     }
   }
 
+  async function reverseSale(reason: string, pin: string): Promise<void> {
+    if (!receipt || submitting) return;
+    setSubmitting(true);
+    try {
+      const operationId = crypto.randomUUID();
+      let ownerAuthorizationId: string | null = null;
+      if (user.role !== "OWNER") {
+        if (!navigator.onLine) {
+          throw new Error("OFFLINE_REQUIRES_OWNER");
+        }
+        const authorization = await requestOwnerAuthorization({
+          branchId: activeBranchId,
+          purpose: "SALE_REVERSAL",
+          targetOperationId: operationId,
+          pin
+        });
+        ownerAuthorizationId = authorization.authorizationId;
+      }
+      await enqueueOperation({
+        type: "SALE_REVERSAL",
+        payload: {
+          reversalId: crypto.randomUUID(),
+          saleId: receipt.saleId,
+          reason: reason.trim(),
+          ownerAuthorizationId
+        },
+        ownerId: user.ownerId,
+        branchId: activeBranchId,
+        actorUserId: user.id,
+        deviceId: user.deviceId
+      });
+      // Restaurar stock local y saldo de fiado (proyección optimista).
+      await applySignedStockDeltas(
+        activeBranchId,
+        receipt.lines.map((line) => ({ productId: line.productId, quantityDelta: `+${line.quantity}` }))
+      );
+      if (receipt.fiadoCents > 0 && receipt.customerId) {
+        setCustomers((current) =>
+          current.map((customer) =>
+            customer.customerId === receipt.customerId
+              ? { ...customer, balanceCents: Math.max(0, customer.balanceCents - receipt.fiadoCents) }
+              : customer
+          )
+        );
+      }
+      setProducts((current) =>
+        current.map((product) => {
+          const line = receipt.lines.find((candidate) => candidate.productId === product.id);
+          if (!line || !product.stockControl || product.onHand === null) return product;
+          return { ...product, onHand: String(Number(product.onHand) + Number(line.quantity)) };
+        })
+      );
+      if (navigator.onLine) {
+        try {
+          await syncNow(activeBranchId);
+        } catch {
+          // Queda en la cola; el SyncProvider lo reintentará.
+        }
+      }
+      setReversing(false);
+      setReceipt(null);
+      setCart([]);
+      void sync();
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   if (receipt) {
     return (
-      <ReceiptView
-        receipt={receipt}
-        branchName={branchName}
-        onClose={() => setReceipt(null)}
-        onNewSale={() => setReceipt(null)}
-      />
+      <>
+        <ReceiptView
+          receipt={receipt}
+          branchName={branchName}
+          onClose={() => setReceipt(null)}
+          onNewSale={() => setReceipt(null)}
+          onReverse={() => setReversing(true)}
+        />
+        {reversing ? (
+          <ReverseSaleSheet
+            totalCents={receipt.totalCents}
+            requiresPin={user.role !== "OWNER"}
+            online={online}
+            submitting={submitting}
+            onCancel={() => setReversing(false)}
+            onConfirm={reverseSale}
+          />
+        ) : null}
+      </>
     );
   }
 
@@ -307,6 +405,72 @@ export function SalesScreen() {
           onConfirm={confirmSale}
         />
       ) : null}
+    </div>
+  );
+}
+
+function ReverseSaleSheet({
+  totalCents,
+  requiresPin,
+  online,
+  submitting,
+  onCancel,
+  onConfirm
+}: {
+  totalCents: number;
+  requiresPin: boolean;
+  online: boolean;
+  submitting: boolean;
+  onCancel: () => void;
+  onConfirm: (reason: string, pin: string) => Promise<void>;
+}) {
+  const [reason, setReason] = useState("");
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const valid = reason.trim().length > 0 && (!requiresPin || pin.length >= 4);
+
+  async function confirm() {
+    if (!valid || submitting) return;
+    setError(null);
+    if (requiresPin && !online) {
+      setError("Anular requiere conexión para validar el PIN del dueño. Conéctate e inténtalo de nuevo.");
+      return;
+    }
+    try {
+      await onConfirm(reason, pin);
+    } catch (err) {
+      setError(
+        err instanceof Error && err.message === "OFFLINE_REQUIRES_OWNER"
+          ? "Anular requiere conexión para validar el PIN del dueño. Conéctate e inténtalo de nuevo."
+          : "No se pudo anular: PIN incorrecto o autorización rechazada."
+      );
+    }
+  }
+
+  return (
+    <div className="pos-modal-backdrop" role="presentation">
+      <div className="pos-modal" role="dialog" aria-modal="true" aria-label="Anular venta">
+        <h2>Anular venta de {formatMoneyCents(totalCents)}</h2>
+        <p className="receipt-note">La venta se revierte y el stock vuelve al inventario. Queda registrada en la auditoría.</p>
+        <label className="pos-field">
+          Motivo de la anulación
+          <input type="text" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Cliente devolvió el producto…" autoFocus />
+        </label>
+        {requiresPin ? (
+          <label className="pos-field">
+            PIN del dueño
+            <input type="password" inputMode="numeric" value={pin} onChange={(event) => setPin(event.target.value)} placeholder="••••" />
+          </label>
+        ) : null}
+        {error ? <p className="pos-error" role="alert">{error}</p> : null}
+        <div className="pos-modal-actions">
+          <button type="button" className="pos-cancel" onClick={onCancel} disabled={submitting}>Cancelar</button>
+          <button type="button" className="pos-confirm" disabled={!valid || submitting} onClick={() => void confirm()}>
+            {submitting ? "Anulando…" : "Confirmar anulación"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

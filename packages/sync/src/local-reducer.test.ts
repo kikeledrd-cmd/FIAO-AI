@@ -1,6 +1,13 @@
 import type { SyncChangeRecord } from "@fiao/contracts/sync";
 import { describe, expect, it } from "vitest";
-import { reduceChange, reduceCreditChange, reduceCustomerChange, reduceSaleChange } from "./local-reducer";
+import {
+  reduceChange,
+  reduceCreditChange,
+  reduceCustomerChange,
+  reduceReversalChange,
+  reduceSaleChange,
+  reduceStockAdjustmentChange
+} from "./local-reducer";
 
 const baseChange: SyncChangeRecord = {
   cursor: "42",
@@ -81,6 +88,52 @@ describe("reduceCreditChange", () => {
   });
 });
 
+describe("reduceStockAdjustmentChange", () => {
+  it("projects a STOCK_ADJUSTMENT change keyed by adjustmentId", () => {
+    const row = reduceStockAdjustmentChange({
+      ...baseChange,
+      type: "STOCK_ADJUSTMENT",
+      payload: {
+        adjustmentId: "80000000-0000-4000-8000-000000000001",
+        productId: "50000000-0000-4000-8000-000000000001",
+        quantityDelta: "5",
+        reason: "Compra",
+        onHandAfter: "15",
+        occurredAt: "2026-08-16T12:00:00.000Z"
+      }
+    });
+    expect(row.key).toBe("30000000-0000-4000-8000-000000000001:10000000-0000-4000-8000-000000000001:STOCK_ADJUSTMENT:80000000-0000-4000-8000-000000000001");
+    expect(row.type).toBe("STOCK_ADJUSTMENT");
+  });
+
+  it("rejects malformed STOCK_ADJUSTMENT payloads", () => {
+    expect(() => reduceStockAdjustmentChange({ ...baseChange, type: "STOCK_ADJUSTMENT", payload: {} })).toThrow("INVALID_SYNC_CHANGE_PAYLOAD");
+  });
+});
+
+describe("reduceReversalChange", () => {
+  it("projects a REVERSAL change keyed by reversalId", () => {
+    const row = reduceReversalChange({
+      ...baseChange,
+      type: "REVERSAL",
+      payload: {
+        reversalId: "90000000-0000-4000-8000-000000000001",
+        saleId: "40000000-0000-4000-8000-000000000001",
+        lines: [{ productId: "50000000-0000-4000-8000-000000000001", quantity: "2" }],
+        reason: "Devolución",
+        fiadoReversedCents: 0,
+        occurredAt: "2026-08-16T12:00:00.000Z"
+      }
+    });
+    expect(row.key).toBe("30000000-0000-4000-8000-000000000001:10000000-0000-4000-8000-000000000001:REVERSAL:90000000-0000-4000-8000-000000000001");
+    expect(row.type).toBe("REVERSAL");
+  });
+
+  it("rejects malformed REVERSAL payloads", () => {
+    expect(() => reduceReversalChange({ ...baseChange, type: "REVERSAL", payload: {} })).toThrow("INVALID_SYNC_CHANGE_PAYLOAD");
+  });
+});
+
 describe("reduceChange", () => {
   it("dispatches by change type", () => {
     expect(reduceChange(baseChange).type).toBe("SALE");
@@ -108,6 +161,20 @@ describe("reduceChange", () => {
         }
       }).type
     ).toBe("CREDIT");
+    expect(
+      reduceChange({
+        ...baseChange,
+        type: "STOCK_ADJUSTMENT",
+        payload: { adjustmentId: "80000000-0000-4000-8000-000000000001", productId: "50000000-0000-4000-8000-000000000001" }
+      }).type
+    ).toBe("STOCK_ADJUSTMENT");
+    expect(
+      reduceChange({
+        ...baseChange,
+        type: "REVERSAL",
+        payload: { reversalId: "90000000-0000-4000-8000-000000000001", saleId: "40000000-0000-4000-8000-000000000001" }
+      }).type
+    ).toBe("REVERSAL");
   });
 
   it("rejects unknown types", () => {

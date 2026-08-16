@@ -2,15 +2,26 @@
 
 import { formatMoneyCents } from "./sales-screen";
 
+export interface ReceiptData {
+  saleId: string;
+  totalCents: number;
+  methodLabel: string;
+  lines: { productId: string; quantity: string }[];
+  fiadoCents: number;
+  customerId?: string;
+}
+
 export function ReceiptView({
   receipt,
   branchName,
-  onNewSale
+  onNewSale,
+  onReverse
 }: {
-  receipt: { saleId: string; totalCents: number; methodLabel: string };
+  receipt: ReceiptData;
   branchName: string;
   onClose: () => void;
   onNewSale: () => void;
+  onReverse: () => void;
 }) {
   const now = new Date();
   return (
@@ -43,6 +54,9 @@ export function ReceiptView({
       <p className="receipt-note">El recibo interno se sincroniza automáticamente cuando hay conexión.</p>
       <button type="button" className="receipt-new-sale" onClick={onNewSale}>
         Nueva venta
+      </button>
+      <button type="button" className="receipt-reverse" onClick={onReverse}>
+        Anular venta
       </button>
     </div>
   );

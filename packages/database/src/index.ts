@@ -18,4 +18,6 @@ export { processOperation } from "./transactions/process-operation";
 export { processSaleOperation } from "./transactions/process-sale";
 export { processCustomerUpsert } from "./transactions/process-customer";
 export { processAbonoOperation } from "./transactions/process-abono";
+export { processStockAdjustment } from "./transactions/process-stock-adjustment";
+export { processSaleReversal } from "./transactions/process-sale-reversal";
 export { CustomerRepository } from "./repositories/customer-repository";

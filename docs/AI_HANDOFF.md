@@ -18,10 +18,11 @@ El roadmap técnico está en:
 
 El plan que se está ejecutando actualmente está en:
 
-`docs/superpowers/plans/2026-08-13-fiao-credit-customers.md`
+`docs/superpowers/plans/2026-08-13-fiao-inventory-reversals.md`
 
-> Plan 1 (foundation/sync/auth/PWA) completado; Tasks 11 (POS ventas) y 12
-> (fiado/clientes) completadas; la siguiente tarea es Task 13 (inventario admin / reversos).
+> Plan 1 (foundation/sync/auth/PWA) completado; Tasks 11 (POS ventas), 12
+> (fiado/clientes) y 13 (inventario/reversos) completadas; la siguiente tarea
+> es Task 14 (compras/proveedores y costo promedio móvil).
 
 Si código y memoria conversacional difieren, primero revisar estos documentos y después el historial Git.
 
@@ -121,7 +122,6 @@ Requisitos principales:
 ### Siguiente tarea (Plan 2)
 
 **Task 12: Fiado y clientes (Credit).**
-
 > ✅ **COMPLETADA 2026-08-16.** Verificación completa pasó en esta máquina
 > (Node 22 + PostgreSQL 18 en Docker): `lint` (0 errores), `typecheck`, `test` (84),
 > `test:integration` (30), `build` y `test:e2e` (7/7 en Chromium móvil).
@@ -150,6 +150,42 @@ Requisitos principales:
 > - E2E `credit-flow.spec.ts`: venta a fiado (saldo 800→825), abono (275→75),
 >   creación de cliente con sync; el `Set-Content` de PowerShell corrompe
 >   UTF-8 — reescribir specs E2E con la herramienta `write`.
+
+### Siguiente tarea (Plan 2)
+
+**Task 13: Inventario y reversos.**
+
+> ✅ **COMPLETADA 2026-08-16.** Verificación completa pasó en esta máquina
+> (Node 22 + PostgreSQL 18 en Docker): `lint` (0 errores, 1 warning
+> preexistente postcss), `typecheck`, `test` (101), `test:integration` (43),
+> `build` y `test:e2e` (10/10 en Chromium móvil).
+> Notas de ejecución:
+>
+> - dominio: `contracts/inventory.ts` (ajuste/reverso/autorización Zod) +
+>   `domain/inventory/inventory-policy.ts` (`parseAdjustmentDelta` con signo,
+>   `applyStockDelta` nunca negativo);
+> - persistencia: procesadores `process-stock-adjustment.ts` y
+>   `process-sale-reversal.ts` (append-only: StockMovement `ADJUSTMENT`/
+>   `REVERSAL`, CreditMovement `REVERSAL` si la venta fue a fiado), despacho
+>   en `process-operation.ts`; `shared.ts` con `persistRejectedOperation`;
+> - autorización: `POST /api/owner/authorize` valida el PIN de un OWNER del
+>   dueño y emite `OwnerAuthorization` (TTL 5 min) ligada al `operationId`;
+>   CASHIER sin autorización → `OWNER_AUTHORIZATION_REQUIRED`; rol OWNER pasa
+>   directo (el PIN solo se usa en el endpoint, nunca viaja en la operación);
+> - sync: `STOCK_ADJUSTMENT`/`SALE_REVERSAL` en `COMMERCE_OPERATION_TYPES`;
+>   `reduceStockAdjustmentChange`/`reduceReversalChange`; `applySignedStockDeltas`
+>   (REVERSAL suma, ajuste con signo) aplicado por el sync client al catálogo;
+> - UI: `/inventory` (lista con stock + modal Ajustar con delta/motivo/PIN si
+>   cajero; página con AppShell force-dynamic), card Inventario en home,
+>   botón **Anular venta** en el recibo del POS (modal con motivo + PIN si
+>   cajero; restaura stock y saldo de fiado localmente);
+> - E2E `inventory-flow.spec.ts`: ajuste +5 como OWNER, reverso de venta cash
+>   (stock restaurado, medición dinámica), cajero con PIN incorrecto → error;
+> - gotchas: `exactOptionalPropertyTypes` exige spread condicional y castear
+>   payloads JSON a `as never`; los payloads mínimos de los reducers exigen
+>   los campos clave (adjustmentId+productId, reversalId+saleId); las páginas
+>   protegidas nuevas deben renderizarse dentro de `AppShell` o el prerender
+>   falla con `APP_SHELL_REQUIRED`.
 
 ## 4. Reglas de arquitectura
 

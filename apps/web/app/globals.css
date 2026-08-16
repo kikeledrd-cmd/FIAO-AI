@@ -542,6 +542,17 @@ input { font-family: inherit; }
   font-size: 15px;
   font-weight: 800;
 }
+.receipt-reverse {
+  width: 100%;
+  padding: 12px;
+  margin-top: 8px;
+  border: 1.5px solid #c0392b;
+  border-radius: var(--fiao-radius-pill);
+  background: transparent;
+  color: #c0392b;
+  font-size: 14px;
+  font-weight: 700;
+}
 
 /* ===== Clientes (Task 12) ===== */
 .customers-screen { padding: 16px; display: flex; flex-direction: column; gap: 14px; }

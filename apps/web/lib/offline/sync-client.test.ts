@@ -108,4 +108,65 @@ describe("sync client", () => {
     expect(summary.cursor).toBe("2");
     expect((await db.syncMeta.get(branchId))?.cursor).toBe("2");
   });
+
+  it("applies REVERSAL and STOCK_ADJUSTMENT deltas to the local catalog", async () => {
+    const productId = "55555555-5555-4555-8555-555555555555";
+    await db.catalog.put({
+      productId,
+      ownerId,
+      branchId,
+      name: "Arroz",
+      barcode: null,
+      priceCents: 5500,
+      stockControl: true,
+      unitLabel: "und",
+      onHand: "8",
+      active: true
+    });
+    const transport: SyncTransport = {
+      push: vi.fn(async () => ({ results: [], cursor: "0" })),
+      pull: vi.fn(async () => ({
+        changes: [
+          {
+            cursor: "1",
+            ownerId,
+            branchId,
+            type: "REVERSAL",
+            payload: {
+              reversalId: "66666666-6666-4666-8666-666666666666",
+              saleId: "77777777-7777-4777-8777-777777777777",
+              lines: [{ productId, quantity: "2" }],
+              reason: "Devolución",
+              fiadoReversedCents: 0,
+              occurredAt: new Date().toISOString()
+            },
+            createdAt: new Date().toISOString()
+          },
+          {
+            cursor: "2",
+            ownerId,
+            branchId,
+            type: "STOCK_ADJUSTMENT",
+            payload: {
+              adjustmentId: "88888888-8888-4888-8888-888888888888",
+              productId,
+              quantityDelta: "-1",
+              reason: "Merma",
+              onHandAfter: "9",
+              occurredAt: new Date().toISOString()
+            },
+            createdAt: new Date().toISOString()
+          }
+        ],
+        nextCursor: "2",
+        hasMore: false
+      }))
+    };
+    const client = createSyncClient({ database: db, transport, sleep: async () => {} });
+    const summary = await client.syncNow(branchId);
+
+    expect(summary.pulled).toBe(2);
+    const row = await db.catalog.get(productId);
+    expect(row?.onHand).toBe("9"); // 8 + 2 (REVERSAL) − 1 (STOCK_ADJUSTMENT)
+  });
 });
