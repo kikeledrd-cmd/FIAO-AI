@@ -7,7 +7,7 @@ export class CatalogRepository {
   async listActiveByBranch(ownerId: string, branchId: string): Promise<CatalogProduct[]> {
     const rows = await this.db.product.findMany({
       where: { ownerId, branchId, active: true },
-      include: { stock: { select: { onHand: true } } },
+      include: { stock: { select: { onHand: true, reserved: true } } },
       orderBy: { name: "asc" }
     });
     return rows.map((row) => ({
@@ -21,6 +21,7 @@ export class CatalogRepository {
       stockControl: row.stockControl,
       unitLabel: row.unitLabel,
       onHand: row.stock?.onHand ?? null,
+      reserved: row.stock?.reserved ?? "0",
       active: row.active
     }));
   }

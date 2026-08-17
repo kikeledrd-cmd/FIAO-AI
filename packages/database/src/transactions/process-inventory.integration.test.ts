@@ -100,6 +100,7 @@ beforeEach(async () => {
   await databaseClient.creditMovement.deleteMany({ where: { branchId: fixtures.branchA.id } });
   await databaseClient.sale.deleteMany({ where: { branchId: fixtures.branchA.id } });
   await databaseClient.auditEvent.deleteMany({ where: { branchId: fixtures.branchA.id } });
+  await databaseClient.loyaltyMovement.deleteMany({ where: { branchId: fixtures.branchA.id } });
   await databaseClient.clientOperation.deleteMany({ where: { branchId: fixtures.branchA.id } });
   await databaseClient.customer.deleteMany({ where: { branchId: fixtures.branchA.id } });
   await databaseClient.ownerAuthorization.deleteMany({ where: { branchId: fixtures.branchA.id } });

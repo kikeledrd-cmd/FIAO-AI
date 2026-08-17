@@ -86,17 +86,30 @@ function formatScaled(value: bigint): string {
   return `${negative ? "-" : ""}${whole}${fraction ? `.${fraction}` : ""}`;
 }
 
+export interface SalePolicyOptions {
+  /** Descuento total aplicado (promos + redención de lealtad), centavos. */
+  discountCents?: number;
+}
+
 /**
  * Valida el payload de una venta y devuelve los totales calculados.
  * Reglas: líneas no vacías; pagos no vacíos, sin métodos duplicados;
- * el total de pagos debe cuadrar EXACTO con el subtotal.
+ * el total de pagos debe cuadrar EXACTO con el total (subtotal − descuento).
  */
-export function validateSale(lines: SaleLine[], payments: SalePayment[]): SalePolicyResult {
+export function validateSale(
+  lines: SaleLine[],
+  payments: SalePayment[],
+  options: SalePolicyOptions = {}
+): SalePolicyResult {
   const subtotal = subtotalCents(lines);
+  const discount = options.discountCents ?? 0;
+  if (!Number.isSafeInteger(discount) || discount < 0) throw new Error("INVALID_DISCOUNT");
+  if (discount > subtotal) throw new Error("DISCOUNT_EXCEEDS_TOTAL");
+  const total = subtotal - discount;
   const paid = paymentTotalCents(payments);
-  if (paid !== subtotal) throw new Error("PAYMENT_TOTAL_MISMATCH");
+  if (paid !== total) throw new Error("PAYMENT_TOTAL_MISMATCH");
   for (const payment of payments) {
-    if (payment.amountCents > subtotal) throw new Error("PAYMENT_EXCEEDS_TOTAL");
+    if (payment.amountCents > total) throw new Error("PAYMENT_EXCEEDS_TOTAL");
   }
-  return { subtotalCents: subtotal, totalCents: subtotal };
+  return { subtotalCents: subtotal, totalCents: total };
 }

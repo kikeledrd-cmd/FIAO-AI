@@ -13,11 +13,11 @@ const ROLE_LABEL = {
 const PLAN2_MODULES: { key: string; label: string; hint: string; href?: string }[] = [
   { key: "sell", label: "Vender", hint: "POS rápido", href: "/sell" },
   { key: "customers", label: "Clientes", hint: "Fiado y abonos", href: "/customers" },
-  { key: "fiao", label: "Fiao", hint: "Fiado y abonos" },
+  { key: "apartados", label: "Apartados", hint: "Reserva y anticipos", href: "/apartados" },
+  { key: "loyalty", label: "Puntos", hint: "Lealtad y recompensas", href: "/loyalty" },
   { key: "suppliers", label: "Proveedores", hint: "Compras y costos", href: "/suppliers" },
   { key: "inventory", label: "Inventario", hint: "Productos y stock", href: "/inventory" },
-  { key: "cash", label: "Caja", hint: "Apertura y arqueo", href: "/cash" },
-  { key: "cash", label: "Caja", hint: "Apertura y cierre" }
+  { key: "cash", label: "Caja", hint: "Apertura y arqueo", href: "/cash" }
 ] as const;
 
 export function HomeScreen() {

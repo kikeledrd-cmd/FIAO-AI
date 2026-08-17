@@ -97,6 +97,7 @@ beforeEach(async () => {
   await databaseClient.productStock.update({ where: { productId: productA.id }, data: { onHand: "10" } });
   // Orden respetando FK Restrict hacia clientOperation.
   await databaseClient.syncChange.deleteMany({ where: { branchId: fixtures.branchA.id } });
+  await databaseClient.loyaltyMovement.deleteMany({ where: { branchId: fixtures.branchA.id } });
   await databaseClient.stockMovement.deleteMany({ where: { branchId: fixtures.branchA.id } });
   await databaseClient.creditMovement.deleteMany({ where: { branchId: fixtures.branchA.id } });
   await databaseClient.sale.deleteMany({ where: { branchId: fixtures.branchA.id } });

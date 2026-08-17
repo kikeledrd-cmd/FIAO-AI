@@ -1,11 +1,13 @@
 import type { SyncChangeRecord } from "@fiao/contracts/sync";
 import { describe, expect, it } from "vitest";
 import {
+  reduceApartadoChange,
   reduceCashMovementChange,
   reduceCashSessionChange,
   reduceChange,
   reduceCreditChange,
   reduceCustomerChange,
+  reduceLoyaltyChange,
   reducePurchaseChange,
   reduceReversalChange,
   reduceSaleChange,
@@ -52,7 +54,7 @@ describe("reduceCustomerChange", () => {
       type: "CUSTOMER",
       payload: {
         customerId: "60000000-0000-4000-8000-000000000001",
-        name: "Doña María",
+        name: "DoÃƒÂ±a MarÃƒÂ­a",
         phoneE164: "+18095550001",
         creditLimitCents: 100000,
         defaultPromiseDays: 7,
@@ -124,7 +126,7 @@ describe("reduceReversalChange", () => {
         reversalId: "90000000-0000-4000-8000-000000000001",
         saleId: "40000000-0000-4000-8000-000000000001",
         lines: [{ productId: "50000000-0000-4000-8000-000000000001", quantity: "2" }],
-        reason: "Devolución",
+        reason: "DevoluciÃƒÂ³n",
         fiadoReversedCents: 0,
         occurredAt: "2026-08-16T12:00:00.000Z"
       }
@@ -231,7 +233,7 @@ describe("reduceCashMovementChange", () => {
         type: "EXPENSE",
         amountCents: 50000,
         category: "Agua",
-        description: "Botellón",
+        description: "BotellÃƒÂ³n",
         reason: null,
         occurredAt: "2026-08-16T13:00:00.000Z"
       }
@@ -306,9 +308,67 @@ describe("reduceChange", () => {
         payload: { purchaseId: "b0000000-0000-4000-8000-000000000001" }
       }).type
     ).toBe("PURCHASE");
+    expect(
+      reduceChange({
+        ...baseChange,
+        type: "APARTADO",
+        payload: { apartadoId: "c0000000-0000-4000-8000-000000000001" }
+      }).type
+    ).toBe("APARTADO");
+    expect(
+      reduceChange({
+        ...baseChange,
+        type: "LOYALTY",
+        payload: { movementId: "d0000000-0000-4000-8000-000000000001", customerId: "60000000-0000-4000-8000-000000000001" }
+      }).type
+    ).toBe("LOYALTY");
   });
 
   it("rejects unknown types", () => {
     expect(() => reduceChange({ ...baseChange, type: "FROBNICATE" })).toThrow("UNKNOWN_SYNC_CHANGE_TYPE");
+  });
+});
+
+describe("reduceApartadoChange", () => {
+  it("projects an APARTADO change keyed by owner/branch/apartadoId", () => {
+    const row = reduceApartadoChange({
+      ...baseChange,
+      type: "APARTADO",
+      payload: {
+        apartadoId: "c0000000-0000-4000-8000-000000000001",
+        customerId: "60000000-0000-4000-8000-000000000001",
+        status: "ACTIVE",
+        lines: [{ productId: "50000000-0000-4000-8000-000000000001", quantity: "2", priceCents: 5500 }],
+        depositCents: 5000,
+        totalCents: 11000
+      }
+    });
+    expect(row.key).toBe("30000000-0000-4000-8000-000000000001:10000000-0000-4000-8000-000000000001:APARTADO:c0000000-0000-4000-8000-000000000001");
+    expect(row.type).toBe("APARTADO");
+  });
+
+  it("rejects malformed APARTADO payloads", () => {
+    expect(() => reduceApartadoChange({ ...baseChange, type: "APARTADO", payload: {} })).toThrow("INVALID_SYNC_CHANGE_PAYLOAD");
+  });
+});
+
+describe("reduceLoyaltyChange", () => {
+  it("projects a LOYALTY change keyed by movementId", () => {
+    const row = reduceLoyaltyChange({
+      ...baseChange,
+      type: "LOYALTY",
+      payload: {
+        movementId: "d0000000-0000-4000-8000-000000000001",
+        customerId: "60000000-0000-4000-8000-000000000001",
+        type: "EARN",
+        pointsDelta: 110
+      }
+    });
+    expect(row.key).toBe("30000000-0000-4000-8000-000000000001:10000000-0000-4000-8000-000000000001:LOYALTY:d0000000-0000-4000-8000-000000000001");
+    expect(row.type).toBe("LOYALTY");
+  });
+
+  it("rejects malformed LOYALTY payloads", () => {
+    expect(() => reduceLoyaltyChange({ ...baseChange, type: "LOYALTY", payload: { movementId: "x" } })).toThrow("INVALID_SYNC_CHANGE_PAYLOAD");
   });
 });

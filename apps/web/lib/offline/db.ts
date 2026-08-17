@@ -59,6 +59,7 @@ export interface CatalogRow {
   stockControl: boolean;
   unitLabel: string;
   onHand: string | null;
+  reserved?: string;
   active: boolean;
 }
 
@@ -80,7 +81,7 @@ export interface CreditMovementRow {
   movementId: string;
   ownerId: string;
   branchId: string;
-  type: "FIAO_SALE" | "ABONO";
+  type: "FIAO_SALE" | "ABONO" | "APARTADO_REFUND";
   customerId: string;
   amountCents: number;
   saleId: string | null;
@@ -125,6 +126,74 @@ export interface LocalCashMovementRow {
   occurredAt: string;
 }
 
+/** Apartado local (deltas APARTADO aplicados por el sync). */
+export interface LocalApartadoRow {
+  apartadoId: string;
+  ownerId: string;
+  branchId: string;
+  customerId: string;
+  status: "ACTIVE" | "COMPLETED" | "CANCELLED";
+  lines: { productId: string; quantity: string; priceCents: number; lineTotalCents: number }[];
+  depositCents: number;
+  totalCents: number;
+  promiseDate: string | null;
+  notes: string | null;
+  saleId: string | null;
+  reason: string | null;
+  occurredAt: string;
+}
+
+/** Movimiento de puntos local (append-only; deltas LOYALTY aplicados por el sync). */
+export interface LocalLoyaltyMovementRow {
+  movementId: string;
+  ownerId: string;
+  branchId: string;
+  customerId: string;
+  type: "EARN" | "REDEEM" | "EXPIRE" | "REVERSAL";
+  pointsDelta: number;
+  saleId: string | null;
+  rewardId: string | null;
+  expiresAt: string | null;
+  occurredAt: string;
+}
+
+/** Recompensa local (datos maestros del owner). */
+export interface LocalLoyaltyRewardRow {
+  rewardId: string;
+  ownerId: string;
+  name: string;
+  kind: "FREE_PRODUCT" | "FIXED_DISCOUNT";
+  productId: string | null;
+  discountCents: number | null;
+  pointsCost: number;
+  active: boolean;
+}
+
+/** Config de lealtad local (datos maestros del owner). */
+export interface LocalLoyaltyConfigRow {
+  ownerId: string;
+  enabled: boolean;
+  pointsPerHundredCents: number;
+  expiryDays: number;
+}
+
+/** Promoción local (datos maestros del owner). */
+export interface LocalPromotionRow {
+  id: string;
+  ownerId: string;
+  name: string;
+  kind: "PERCENT_OFF" | "FIXED_OFF" | "BUNDLE_BUY_X_GET_Y";
+  scope: "PRODUCT" | "TOTAL";
+  productId: string | null;
+  percentOffCents: number | null;
+  fixedOffCents: number | null;
+  buyQty: number | null;
+  getQty: number | null;
+  active: boolean;
+  startsAt: string | null;
+  endsAt: string | null;
+}
+
 export class FiaoOfflineDatabase extends Dexie {
   pendingOperations!: Table<PendingOperationRow, string>;
   syncMeta!: Table<SyncMetaRow, string>;
@@ -138,6 +207,11 @@ export class FiaoOfflineDatabase extends Dexie {
   suppliers!: Table<LocalSupplierRow, string>;
   cashSessions!: Table<LocalCashSessionRow, string>;
   cashMovements!: Table<LocalCashMovementRow, string>;
+  apartados!: Table<LocalApartadoRow, string>;
+  loyaltyMovements!: Table<LocalLoyaltyMovementRow, string>;
+  loyaltyRewards!: Table<LocalLoyaltyRewardRow, string>;
+  loyaltyConfig!: Table<LocalLoyaltyConfigRow, string>;
+  promotions!: Table<LocalPromotionRow, string>;
 
   constructor(name = "fiao-offline") {
     super(name);
@@ -194,6 +268,25 @@ export class FiaoOfflineDatabase extends Dexie {
       suppliers: "&supplierId, ownerId, branchId, name, active",
       cashSessions: "&sessionId, ownerId, branchId, status",
       cashMovements: "&movementId, ownerId, branchId, sessionId, type, occurredAt"
+    });
+    this.version(6).stores({
+      pendingOperations: "&operationId, branchId, occurredAt, queuedAt",
+      syncMeta: "&branchId, ownerId",
+      syncConflicts: "&id, ownerId, operationId, branchId, kind, createdAt",
+      branches: "&id, ownerId",
+      users: "&id, ownerId, role",
+      projectionRows: "&key, ownerId, branchId, type, cursor",
+      catalog: "&productId, ownerId, branchId, name, active",
+      customers: "&customerId, ownerId, branchId, name, active",
+      creditMovements: "&movementId, ownerId, branchId, customerId, type, occurredAt",
+      suppliers: "&supplierId, ownerId, branchId, name, active",
+      cashSessions: "&sessionId, ownerId, branchId, status",
+      cashMovements: "&movementId, ownerId, branchId, sessionId, type, occurredAt",
+      apartados: "&apartadoId, ownerId, branchId, customerId, status, occurredAt",
+      loyaltyMovements: "&movementId, ownerId, branchId, customerId, type, occurredAt",
+      loyaltyRewards: "&rewardId, ownerId, active",
+      loyaltyConfig: "&ownerId",
+      promotions: "&id, ownerId, active"
     });
   }
 }

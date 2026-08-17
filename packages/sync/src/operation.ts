@@ -16,7 +16,10 @@ export const COMMERCE_OPERATION_TYPES = [
   "CASH_EXPENSE",
   "CASH_WITHDRAWAL",
   "CASH_INJECTION",
-  "CASH_CLOSE"
+  "CASH_CLOSE",
+  "APARTADO_CREATE",
+  "APARTADO_COMPLETE",
+  "APARTADO_CANCEL"
 ] as const;
 export type CommerceOperationType = (typeof COMMERCE_OPERATION_TYPES)[number];
 

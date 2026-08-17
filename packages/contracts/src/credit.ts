@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const CREDIT_MOVEMENT_TYPES = ["FIAO_SALE", "ABONO"] as const;
+export const CREDIT_MOVEMENT_TYPES = ["FIAO_SALE", "ABONO", "APARTADO_REFUND"] as const;
 export type CreditMovementType = (typeof CREDIT_MOVEMENT_TYPES)[number];
 
 /** Cliente de una sucursal con límite de crédito en centavos. */

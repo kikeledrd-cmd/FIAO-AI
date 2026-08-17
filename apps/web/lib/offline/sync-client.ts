@@ -1,6 +1,6 @@
 import type { ClientOperationEnvelope, OperationResult, SyncChangeRecord } from "@fiao/contracts/sync";
 import { ApiError, apiJson } from "@/lib/api/client";
-import { FiaoOfflineDatabase, offlineDb } from "./db";
+import { FiaoOfflineDatabase, offlineDb, type LocalApartadoRow } from "./db";
 import { applySyncChanges, listPendingOperations, markOperationResult } from "./queue";
 import { applySignedStockDeltas, adjustLocalStock } from "./catalog";
 import { applyCreditDeltasLocally, upsertCustomersLocally } from "./customers";
@@ -91,6 +91,8 @@ export function createSyncClient(options?: {
           await applyCreditDeltasLocally(response.changes, database);
           await upsertSuppliersLocally(response.changes, database);
           await applyCashDeltasLocally(response.changes, database);
+          await applyApartadoDeltasLocally(response.changes, database);
+          await applyLoyaltyDeltasLocally(response.changes, database);
           pulled += response.changes.length;
           cursor = response.nextCursor;
           if (!response.hasMore) break;
@@ -306,6 +308,128 @@ async function applyCashDeltasLocally(
       }
     }
   });
+}
+
+/** Aplica deltas APARTADO: upsert del apartado y ajuste de reservas en el
+ *  catálogo local (ACTIVE → reserved += qty; COMPLETED/CANCELLED → reserved
+ *  −= qty). El onHand lo ajusta el delta SALE de la venta de completación. */
+async function applyApartadoDeltasLocally(
+  changes: SyncChangeRecord[],
+  database: FiaoOfflineDatabase
+): Promise<void> {
+  const apartadoChanges = changes.filter((change) => change.type === "APARTADO");
+  if (apartadoChanges.length === 0) return;
+  const reservationDeltas: { productId: string; quantityDelta: string }[] = [];
+  await database.transaction("rw", database.apartados, database.catalog, async () => {
+    for (const change of apartadoChanges) {
+      const payload = change.payload as {
+        apartadoId?: string;
+        customerId?: string | null;
+        status?: string;
+        lines?: { productId: string; quantity: string; priceCents?: number; lineTotalCents?: number }[];
+        depositCents?: number;
+        totalCents?: number;
+        promiseDate?: string | null;
+        notes?: string | null;
+        saleId?: string | null;
+        reason?: string | null;
+        occurredAt?: string;
+      };
+      if (!payload.apartadoId || !payload.status) continue;
+      const existing = await database.apartados.get(payload.apartadoId);
+      const lines = (payload.lines ?? existing?.lines ?? []).map((line) => ({
+        productId: line.productId,
+        quantity: line.quantity,
+        priceCents: typeof line.priceCents === "number" ? line.priceCents : 0,
+        lineTotalCents: typeof line.lineTotalCents === "number" ? line.lineTotalCents : 0
+      }));
+      await database.apartados.put({
+        apartadoId: payload.apartadoId,
+        ownerId: change.ownerId,
+        branchId: change.branchId,
+        customerId: payload.customerId ?? existing?.customerId ?? "",
+        status: payload.status as LocalApartadoRow["status"],
+        lines,
+        depositCents: payload.depositCents ?? existing?.depositCents ?? 0,
+        totalCents: payload.totalCents ?? existing?.totalCents ?? 0,
+        promiseDate: payload.promiseDate ?? existing?.promiseDate ?? null,
+        notes: payload.notes ?? existing?.notes ?? null,
+        saleId: payload.saleId ?? existing?.saleId ?? null,
+        reason: payload.reason ?? existing?.reason ?? null,
+        occurredAt: payload.occurredAt ?? change.createdAt
+      });
+      for (const line of lines) {
+        const sign = payload.status === "ACTIVE" ? "+" : "-";
+        reservationDeltas.push({ productId: line.productId, quantityDelta: `${sign}${line.quantity}` });
+      }
+    }
+    if (reservationDeltas.length === 0) return;
+    for (const delta of reservationDeltas) {
+      const row = await database.catalog.get(delta.productId);
+      if (!row || !row.stockControl) continue;
+      const reserved = row.reserved ?? "0";
+      row.reserved = delta.quantityDelta.startsWith("-")
+        ? subtractQuantitySafely(reserved, delta.quantityDelta.slice(1))
+        : addToQuantity(reserved, delta.quantityDelta.slice(1));
+      await database.catalog.put(row);
+    }
+  });
+}
+
+/** Aplica deltas LOYALTY: movimientos del ledger de puntos (append-only). */
+async function applyLoyaltyDeltasLocally(
+  changes: SyncChangeRecord[],
+  database: FiaoOfflineDatabase
+): Promise<void> {
+  const loyaltyChanges = changes.filter((change) => change.type === "LOYALTY");
+  if (loyaltyChanges.length === 0) return;
+  await database.transaction("rw", database.loyaltyMovements, async () => {
+    for (const change of loyaltyChanges) {
+      const payload = change.payload as {
+        movementId?: string;
+        customerId?: string;
+        type?: string;
+        pointsDelta?: number;
+        saleId?: string | null;
+        rewardId?: string | null;
+        expiresAt?: string | null;
+        occurredAt?: string;
+      };
+      if (!payload.movementId || !payload.customerId || payload.pointsDelta === undefined) continue;
+      const type = payload.type === "REDEEM" || payload.type === "EXPIRE" || payload.type === "REVERSAL"
+        ? payload.type
+        : "EARN";
+      await database.loyaltyMovements.put({
+        movementId: payload.movementId,
+        ownerId: change.ownerId,
+        branchId: change.branchId,
+        customerId: payload.customerId,
+        type,
+        pointsDelta: payload.pointsDelta,
+        saleId: payload.saleId ?? null,
+        rewardId: payload.rewardId ?? null,
+        expiresAt: payload.expiresAt ?? null,
+        occurredAt: payload.occurredAt ?? change.createdAt
+      });
+    }
+  });
+}
+
+function subtractQuantitySafely(left: string, right: string): string {
+  if (/^0+(\.[0-9]+)?$/.test(left)) return "0";
+  const leftParts = left.split(".");
+  const rightParts = right.split(".");
+  const wholeA = leftParts[0] ?? "0";
+  const fracA = leftParts[1] ?? "";
+  const wholeB = rightParts[0] ?? "0";
+  const fracB = rightParts[1] ?? "";
+  const scaledA = BigInt(wholeA) * 1000n + BigInt((fracA + "000").slice(0, 3));
+  const scaledB = BigInt(wholeB) * 1000n + BigInt((fracB + "000").slice(0, 3));
+  const total = scaledA - scaledB;
+  if (total < 0n) return "0";
+  const whole = total / 1000n;
+  const fraction = (total % 1000n).toString().padStart(3, "0").replace(/0+$/, "");
+  return `${whole}${fraction ? `.${fraction}` : ""}`;
 }
 
 async function applyCustomerDeltasLocally(

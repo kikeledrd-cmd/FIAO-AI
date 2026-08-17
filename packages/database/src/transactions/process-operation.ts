@@ -11,6 +11,9 @@ import {
 import { databaseClient, type FiaoPrismaClient } from "../client";
 import { SyncRepository } from "../repositories/sync-repository";
 import { processAbonoOperation } from "./process-abono";
+import { processApartadoCancel } from "./process-apartado-cancel";
+import { processApartadoComplete } from "./process-apartado-complete";
+import { processApartadoCreate } from "./process-apartado-create";
 import { processCashClose } from "./process-cash-close";
 import { processCashMovement } from "./process-cash-movement";
 import { processCashOpen } from "./process-cash-open";
@@ -40,6 +43,9 @@ export async function processOperation(
       return processCashMovement(context, envelope, db);
     }
     if (envelope.type === "CASH_CLOSE") return processCashClose(context, envelope, db);
+    if (envelope.type === "APARTADO_CREATE") return processApartadoCreate(context, envelope, db);
+    if (envelope.type === "APARTADO_COMPLETE") return processApartadoComplete(context, envelope, db);
+    if (envelope.type === "APARTADO_CANCEL") return processApartadoCancel(context, envelope, db);
   }
   if (!isFoundationOperationType(envelope.type)) throw new Error("UNKNOWN_OPERATION_TYPE");
 

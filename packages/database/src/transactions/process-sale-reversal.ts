@@ -137,6 +137,50 @@ export async function processSaleReversal(
         ? (await tx.customer.findUnique({ where: { id: customerPkId }, select: { customerId: true } }))?.customerId
         : undefined;
 
+      // Revertir el efecto de lealtad (EARN/REDEEM de la venta).
+      const loyaltyMovements = await tx.loyaltyMovement.findMany({
+        where: { ownerId: context.ownerId, branchId: context.branchId, saleId: sale.id },
+        select: { id: true, movementId: true, type: true, pointsDelta: true, customerId: true }
+      });
+      for (const loyaltyMovement of loyaltyMovements) {
+        if (loyaltyMovement.type === "EXPIRE") continue;
+        const reversalMovementId = crypto.randomUUID();
+        await tx.loyaltyMovement.create({
+          data: {
+            ownerId: context.ownerId,
+            branchId: context.branchId,
+            customerId: loyaltyMovement.customerId,
+            movementId: reversalMovementId,
+            type: "REVERSAL",
+            pointsDelta: -loyaltyMovement.pointsDelta,
+            saleId: null,
+            rewardId: null,
+            reason: "Reverso de venta",
+            expiresAt: null,
+            clientOperationId: operation.id,
+            occurredAt
+          }
+        });
+        await tx.syncChange.create({
+          data: {
+            ownerId: context.ownerId,
+            branchId: context.branchId,
+            clientOperationId: operation.id,
+            type: "LOYALTY",
+            payload: {
+              movementId: reversalMovementId,
+              type: "REVERSAL",
+              customerId: customerPublicId ?? loyaltyMovement.customerId,
+              pointsDelta: -loyaltyMovement.pointsDelta,
+              rewardId: null,
+              saleId: sale.saleId,
+              occurredAt: occurredAt.toISOString()
+            }
+          },
+          select: { seq: true }
+        });
+      }
+
       const reversalMovementId = crypto.randomUUID();
       if (fiadoCents > 0 && customerPublicId) {
         await tx.creditMovement.create({

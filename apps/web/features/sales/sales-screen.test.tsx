@@ -78,6 +78,12 @@ vi.mock("@/lib/offline/customers", () => ({
   saveCustomersLocally: vi.fn().mockResolvedValue(undefined)
 }));
 
+vi.mock("@/lib/offline/promotions", () => ({
+  listPromotionsLocally: vi.fn().mockResolvedValue([]),
+  loadPromotionsFromServer: vi.fn().mockResolvedValue([]),
+  savePromotionsLocally: vi.fn().mockResolvedValue(undefined)
+}));
+
 describe("formatMoneyCents", () => {
   it("formats pesos dominicanos with cents", () => {
     expect(formatMoneyCents(27500)).toBe("RD$275.00");

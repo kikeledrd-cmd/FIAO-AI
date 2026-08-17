@@ -31,6 +31,7 @@ export async function saveCatalogLocally(
         stockControl: product.stockControl,
         unitLabel: product.unitLabel,
         onHand: product.onHand,
+        ...(product.reserved !== undefined ? { reserved: product.reserved } : {}),
         active: product.active
       }))
     );
@@ -53,6 +54,7 @@ export async function listCatalogLocally(
     stockControl: row.stockControl,
     unitLabel: row.unitLabel,
     onHand: row.onHand,
+    ...(row.reserved !== undefined ? { reserved: row.reserved } : {}),
     active: row.active
   }));
 }

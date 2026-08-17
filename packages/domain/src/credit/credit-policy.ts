@@ -30,8 +30,10 @@ export function parseMoneyCents(value: string): number {
 }
 
 /**
- * Saldo del cliente = Σ FIAO_SALE − Σ ABONO.
+ * Saldo del cliente = Σ FIAO_SALE − Σ ABONO − Σ APARTADO_REFUND.
  * El saldo nunca se persiste como campo: se reconstruye desde movimientos.
+ * Un saldo negativo significa crédito a favor del cliente (p. ej. reembolso
+ * de un anticipo de apartado cancelado).
  */
 export function creditBalanceCents(movements: CreditMovementInput[]): number {
   let balance = 0n;
@@ -39,10 +41,10 @@ export function creditBalanceCents(movements: CreditMovementInput[]): number {
     const amount = BigInt(movement.amountCents);
     if (amount <= 0n) throw new Error("INVALID_CREDIT_MOVEMENT");
     if (movement.type === "FIAO_SALE") balance += amount;
-    else if (movement.type === "ABONO") balance -= amount;
+    else if (movement.type === "ABONO" || movement.type === "APARTADO_REFUND") balance -= amount;
     else throw new Error("UNKNOWN_CREDIT_MOVEMENT");
   }
-  if (balance < 0n) throw new Error("NEGATIVE_CREDIT_BALANCE");
+  if (balance < -BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("CREDIT_BALANCE_OVERFLOW");
   if (balance > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("CREDIT_BALANCE_OVERFLOW");
   return Number(balance);
 }

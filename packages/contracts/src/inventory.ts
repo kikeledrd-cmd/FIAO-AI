@@ -27,11 +27,29 @@ export type SaleReversalPayload = z.infer<typeof saleReversalPayloadSchema>;
 /** Solicitud al endpoint de autorización de OWNER. */
 export const ownerAuthorizeRequestSchema = z.object({
   branchId: z.uuid(),
-  purpose: z.enum(["STOCK_ADJUSTMENT", "SALE_REVERSAL"]),
+  purpose: z.enum([
+    "STOCK_ADJUSTMENT",
+    "SALE_REVERSAL",
+    "PURCHASE",
+    "CASH_EXPENSE",
+    "CASH_WITHDRAWAL",
+    "CASH_INJECTION",
+    "CASH_CLOSE",
+    "APARTADO_CANCEL"
+  ]),
   targetOperationId: z.uuid(),
   pin: z.string().min(1).max(32)
 });
 export type OwnerAuthorizeRequest = z.infer<typeof ownerAuthorizeRequestSchema>;
 
-export const OWNER_AUTHORIZE_PURPOSES = ["STOCK_ADJUSTMENT", "SALE_REVERSAL"] as const;
+export const OWNER_AUTHORIZE_PURPOSES = [
+  "STOCK_ADJUSTMENT",
+  "SALE_REVERSAL",
+  "PURCHASE",
+  "CASH_EXPENSE",
+  "CASH_WITHDRAWAL",
+  "CASH_INJECTION",
+  "CASH_CLOSE",
+  "APARTADO_CANCEL"
+] as const;
 export type OwnerAuthorizePurpose = (typeof OWNER_AUTHORIZE_PURPOSES)[number];

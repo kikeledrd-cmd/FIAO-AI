@@ -6,12 +6,25 @@ import {
   creditBalanceCents
 } from "@fiao/domain/credit/credit-policy";
 import {
+  applyPromotions,
+  type PromotionInput
+} from "@fiao/domain/promotions/promotion-policy";
+import {
+  assertRedemptionAllowed,
+  computeLoyaltyBalance,
+  computePointsEarned,
+  loyaltyExpiresAt
+} from "@fiao/domain/loyalty/loyalty-policy";
+import {
   parseSaleQuantity,
+  subtotalCents,
   subtractDecimalQuantities,
   validateSale
 } from "@fiao/domain/sales/sale-policy";
 import { assertOperationScope, parseOperationTimestamp } from "@fiao/sync/operation";
 import { databaseClient, type FiaoPrismaClient } from "../client";
+import type { Prisma } from "../../generated/prisma/client";
+import type { LoyaltyMovementType } from "@fiao/domain/loyalty/loyalty-policy";
 
 /**
  * Procesa una operación de venta de forma idempotente.
@@ -35,9 +48,31 @@ export async function processSaleOperation(
   }
   const payload = parsed.data;
 
+  // Redención de lealtad primero: recompensa activa + saldo suficiente.
+  const rewardCheck = payload.reward
+    ? await validateRedemption(context, payload, discountCentsFor(payload), db)
+    : null;
+  if (payload.reward && rewardCheck === null) {
+    return persistRejectedOperation(context, envelope, "INVALID_REWARD", db);
+  }
+
+  // Promos: recompute determinístico del lado del servidor (spec §8).
+  // El descuento de la redención se separa del reclamado por promos.
+  const discountCents = payload.discountCents ?? 0;
+  const promoDiscount = await validatePromotions(
+    context,
+    envelope,
+    payload,
+    discountCents - (rewardCheck?.discountCents ?? 0),
+    db
+  );
+  if (promoDiscount === null) {
+    return persistRejectedOperation(context, envelope, "PROMOTION_MISMATCH", db);
+  }
+
   let totals;
   try {
-    totals = validateSale(payload.lines, payload.payments);
+    totals = validateSale(payload.lines, payload.payments, { discountCents });
   } catch (error) {
     return persistRejectedOperation(context, envelope, errorMessage(error), db);
   }
@@ -119,8 +154,9 @@ export async function processSaleOperation(
 
       // Crédito: si hay pagos FIADO, resolver la PK interna del cliente para
       // los FK (Sale.customerId y CreditMovement.customerId apuntan a Customer.id).
+      // También se resuelve para lealtad (puntos/recompensas) aunque no haya FIADO.
       let customerPkId: string | null = null;
-      if (fiadoCents > 0 && payload.customerId) {
+      if (payload.customerId) {
         const customerRow = await tx.customer.findUnique({
           where: { customerId: payload.customerId },
           select: { id: true }
@@ -144,6 +180,9 @@ export async function processSaleOperation(
           payments: payload.payments as never,
           subtotalCents: totals.subtotalCents,
           totalCents: totals.totalCents,
+          ...(discountCents > 0 ? { discountCents } : {}),
+          ...(payload.promotionIds && payload.promotionIds.length > 0 ? { promotionIds: payload.promotionIds as never } : {}),
+          ...(payload.reward ? { reward: payload.reward as never } : {}),
           occurredAt
         },
         select: { id: true, saleId: true }
@@ -242,6 +281,30 @@ export async function processSaleOperation(
         });
       }
 
+      // Lealtad: ganancia de puntos y/o redención (spec §8).
+      const loyaltyChanges = await createLoyaltyDeltas(
+        tx,
+        context,
+        operation.id,
+        payload,
+        totals.totalCents,
+        customerPkId,
+        sale.id,
+        occurredAt
+      );
+      for (const loyaltyChange of loyaltyChanges) {
+        await tx.syncChange.create({
+          data: {
+            ownerId: context.ownerId,
+            branchId: context.branchId,
+            clientOperationId: operation.id,
+            type: "LOYALTY",
+            payload: loyaltyChange as never
+          },
+          select: { seq: true }
+        });
+      }
+
       const persistedResult = {
         operationId: envelope.operationId,
         status: "ACCEPTED" as const,
@@ -274,8 +337,220 @@ function saleChangePayload(payload: SaleOperationPayload, totals: { subtotalCent
     lines: payload.lines,
     payments: payload.payments,
     subtotalCents: totals.subtotalCents,
-    totalCents: totals.totalCents
+    totalCents: totals.totalCents,
+    ...(payload.promotionIds && payload.promotionIds.length > 0 ? { promotionIds: payload.promotionIds } : {}),
+    ...((payload.discountCents ?? 0) > 0 ? { discountCents: payload.discountCents } : {}),
+    ...(payload.reward ? { reward: payload.reward } : {})
   };
+}
+
+/**
+ * Valida las promos de la venta con la función pura del dominio:
+ * recomputa `applyPromotions` con las promos activas del owner en el momento
+ * de la operación y exige que el descuento y los IDs coincidan EXACTOS.
+ * Devuelve el descuento de promos validado, o null si hay desajuste.
+ */
+async function validatePromotions(
+  context: CommandContext,
+  envelope: ClientOperationEnvelope,
+  payload: SaleOperationPayload,
+  discountCents: number,
+  db: FiaoPrismaClient
+): Promise<number | null> {
+  if ((payload.promotionIds === undefined || payload.promotionIds.length === 0) && discountCents === 0) {
+    return 0;
+  }
+  const rows = await db.promotion.findMany({
+    where: { ownerId: context.ownerId, active: true },
+    select: {
+      id: true,
+      kind: true,
+      scope: true,
+      productId: true,
+      percentOffCents: true,
+      fixedOffCents: true,
+      buyQty: true,
+      getQty: true,
+      active: true,
+      startsAt: true,
+      endsAt: true
+    }
+  });
+  const promotions: PromotionInput[] = rows.map((row) => ({
+    id: row.id,
+    kind: row.kind as PromotionInput["kind"],
+    scope: row.scope as PromotionInput["scope"],
+    productId: row.productId,
+    percentOffCents: row.percentOffCents,
+    fixedOffCents: row.fixedOffCents,
+    buyQty: row.buyQty,
+    getQty: row.getQty,
+    active: row.active,
+    startsAt: row.startsAt ? row.startsAt.toISOString() : null,
+    endsAt: row.endsAt ? row.endsAt.toISOString() : null
+  }));
+  const now = new Date(envelope.occurredAt);
+  const result = applyPromotions(payload.lines, promotions, now);
+  const applied = new Set(result.appliedPromotionIds);
+  const claimed = new Set(payload.promotionIds ?? []);
+  if (applied.size !== claimed.size) return null;
+  for (const id of applied) {
+    if (!claimed.has(id)) return null;
+  }
+  if (result.totalDiscountCents !== discountCents) return null;
+  return result.totalDiscountCents;
+}
+
+/**
+ * Valida la redención de lealtad: recompensa activa, saldo suficiente y
+ * umbral mínimo de descuento (FIXED_DISCOUNT exige el descuento fijo;
+ * FREE_PRODUCT exige que el producto esté en las líneas). Devuelve el
+ * descuento esperado de la redención para separarlo del de las promos.
+ */
+async function validateRedemption(
+  context: CommandContext,
+  payload: SaleOperationPayload,
+  discountCents: number,
+  db: FiaoPrismaClient
+): Promise<{ rewardId: string; pointsCost: number; discountCents: number } | null> {
+  if (!payload.reward) return null;
+  if (!payload.customerId) return null;
+
+  const reward = await db.loyaltyReward.findFirst({
+    where: { rewardId: payload.reward.rewardId, ownerId: context.ownerId, active: true },
+    select: { rewardId: true, kind: true, productId: true, discountCents: true, pointsCost: true }
+  });
+  if (!reward) return null;
+  if (reward.pointsCost !== payload.reward.pointsCost) return null;
+
+  const customer = await db.customer.findFirst({
+    where: { customerId: payload.customerId, ownerId: context.ownerId, branchId: context.branchId },
+    select: { id: true }
+  });
+  if (!customer) return null;
+  const movements = await db.loyaltyMovement.findMany({
+    where: { ownerId: context.ownerId, branchId: context.branchId, customerId: customer.id },
+    select: { type: true, pointsDelta: true, occurredAt: true, expiresAt: true }
+  });
+  const config = await db.loyaltyConfig.findUnique({
+    where: { ownerId: context.ownerId },
+    select: { expiryDays: true }
+  });
+  const balance = computeLoyaltyBalance(
+    movements.map((movement) => ({
+      type: movement.type as LoyaltyMovementType,
+      pointsDelta: movement.pointsDelta,
+      occurredAt: movement.occurredAt.toISOString(),
+      expiresAt: movement.expiresAt ? movement.expiresAt.toISOString() : null
+    })),
+    new Date(),
+    config?.expiryDays ?? 180
+  );
+  try {
+    assertRedemptionAllowed({ balance, pointsCost: reward.pointsCost, rewardActive: true });
+  } catch {
+    return null;
+  }
+
+  if (reward.kind === "FIXED_DISCOUNT") {
+    const expected = Math.min(reward.discountCents ?? 0, Number.MAX_SAFE_INTEGER);
+    if (discountCents < expected) return null;
+    return { rewardId: reward.rewardId, pointsCost: reward.pointsCost, discountCents: expected };
+  }
+  if (reward.kind === "FREE_PRODUCT") {
+    if (!reward.productId || !payload.lines.some((line) => line.productId === reward.productId)) return null;
+    return { rewardId: reward.rewardId, pointsCost: reward.pointsCost, discountCents: 0 };
+  }
+  return null;
+}
+
+function discountCentsFor(payload: SaleOperationPayload): number {
+  return payload.discountCents ?? 0;
+}
+
+/** Crea los movimientos de lealtad (EARN/REDEEM) y sus deltas de sync. */
+async function createLoyaltyDeltas(
+  tx: Prisma.TransactionClient,
+  context: CommandContext,
+  operationId: string,
+  payload: SaleOperationPayload,
+  totalCents: number,
+  customerPkId: string | null,
+  salePkId: string,
+  occurredAt: Date
+): Promise<Record<string, unknown>[]> {
+  const deltas: Record<string, unknown>[] = [];
+  if (!payload.customerId || !customerPkId) return deltas;
+
+  const config = await tx.loyaltyConfig.findUnique({
+    where: { ownerId: context.ownerId },
+    select: { enabled: true, pointsPerHundredCents: true, expiryDays: true }
+  });
+
+  // Redención primero (consume saldo), luego la ganancia de la venta.
+  if (payload.reward) {
+    const movementId = crypto.randomUUID();
+    await tx.loyaltyMovement.create({
+      data: {
+        ownerId: context.ownerId,
+        branchId: context.branchId,
+        customerId: customerPkId,
+        movementId,
+        type: "REDEEM",
+        pointsDelta: -payload.reward.pointsCost,
+        saleId: salePkId,
+        rewardId: payload.reward.rewardId,
+        reason: "Canje de recompensa en venta",
+        expiresAt: null,
+        clientOperationId: operationId,
+        occurredAt
+      }
+    });
+    deltas.push({
+      movementId,
+      type: "REDEEM",
+      customerId: payload.customerId,
+      pointsDelta: -payload.reward.pointsCost,
+      rewardId: payload.reward.rewardId,
+      saleId: payload.saleId,
+      occurredAt: occurredAt.toISOString()
+    });
+  }
+
+  if (config?.enabled !== false && totalCents > 0) {
+    const points = computePointsEarned(totalCents, config?.pointsPerHundredCents ?? 100);
+    if (points > 0) {
+      const movementId = crypto.randomUUID();
+      const expiresAt = loyaltyExpiresAt(occurredAt.toISOString(), config?.expiryDays ?? 180);
+      await tx.loyaltyMovement.create({
+        data: {
+          ownerId: context.ownerId,
+          branchId: context.branchId,
+          customerId: customerPkId,
+          movementId,
+          type: "EARN",
+          pointsDelta: points,
+          saleId: salePkId,
+          rewardId: null,
+          reason: null,
+          expiresAt: new Date(expiresAt),
+          clientOperationId: operationId,
+          occurredAt
+        }
+      });
+      deltas.push({
+        movementId,
+        type: "EARN",
+        customerId: payload.customerId,
+        pointsDelta: points,
+        rewardId: null,
+        saleId: payload.saleId,
+        expiresAt,
+        occurredAt: occurredAt.toISOString()
+      });
+    }
+  }
+  return deltas;
 }
 
 function fiadoTotalCents(payments: SalePayment[]): number {

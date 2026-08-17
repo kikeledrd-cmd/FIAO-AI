@@ -34,14 +34,20 @@ async function seed() {
     // Limpieza idempotente del historial comercial del dueño demo
     // (corridas E2E previas acumulan ventas/stock/saldo). Orden por FK Restrict.
     await tx.syncChange.deleteMany({ where: { ownerId: ownerAccount.id } });
+    await tx.loyaltyMovement.deleteMany({ where: { ownerId: ownerAccount.id } });
+    await tx.loyaltyReward.deleteMany({ where: { ownerId: ownerAccount.id } });
+    await tx.loyaltyConfig.deleteMany({ where: { ownerId: ownerAccount.id } });
+    await tx.promotion.deleteMany({ where: { ownerId: ownerAccount.id } });
+    await tx.apartadoLine.deleteMany({ where: { ownerId: ownerAccount.id } });
+    await tx.creditMovement.deleteMany({ where: { ownerId: ownerAccount.id } });
+    await tx.sale.deleteMany({ where: { ownerId: ownerAccount.id } });
+    await tx.apartado.deleteMany({ where: { ownerId: ownerAccount.id } });
     await tx.cashMovement.deleteMany({ where: { ownerId: ownerAccount.id } });
     await tx.cashSession.deleteMany({ where: { ownerId: ownerAccount.id } });
     await tx.purchaseLine.deleteMany({ where: { ownerId: ownerAccount.id } });
     await tx.purchase.deleteMany({ where: { ownerId: ownerAccount.id } });
     await tx.supplier.deleteMany({ where: { ownerId: ownerAccount.id } });
     await tx.stockMovement.deleteMany({ where: { ownerId: ownerAccount.id } });
-    await tx.creditMovement.deleteMany({ where: { ownerId: ownerAccount.id } });
-    await tx.sale.deleteMany({ where: { ownerId: ownerAccount.id } });
     await tx.auditEvent.deleteMany({ where: { ownerId: ownerAccount.id } });
     await tx.clientOperation.deleteMany({ where: { ownerId: ownerAccount.id } });
     await tx.customer.deleteMany({ where: { ownerId: ownerAccount.id } });
@@ -81,9 +87,10 @@ async function seed() {
     await seedCatalog(tx, ownerAccount.id, BRANCH_INVIVIENDA_ID);
     await seedCustomers(tx, ownerAccount.id, BRANCH_LOS_MINA_ID);
     await seedCustomers(tx, ownerAccount.id, BRANCH_INVIVIENDA_ID);
+    await seedLoyaltyAndPromotions(tx, ownerAccount.id, BRANCH_LOS_MINA_ID);
   });
 
-  console.log("Seed complete: owner + cashier + 2 branches + catalog + customers (Los Mina, Invivienda).");
+  console.log("Seed complete: owner + cashier + 2 branches + catalog + customers + loyalty/promos.");
 }
 
 const DEMO_CATALOG = [
@@ -146,6 +153,66 @@ async function seedCustomers(tx: Parameters<Parameters<typeof databaseClient.$tr
         }
       });
     }
+  }
+}
+
+const LOYALTY_REWARD_ID = "a0000000-0000-4000-8000-000000000001";
+const PROMO_PERCENT_ID = "b0000000-0000-4000-8000-000000000001";
+
+async function seedLoyaltyAndPromotions(
+  tx: Parameters<Parameters<typeof databaseClient.$transaction>[0]>[0],
+  ownerId: string,
+  branchId: string
+) {
+  await tx.loyaltyConfig.upsert({
+    where: { ownerId },
+    update: { enabled: true, pointsPerHundredCents: 100, expiryDays: 180 },
+    create: { ownerId, enabled: true, pointsPerHundredCents: 100, expiryDays: 180 }
+  });
+
+  await tx.loyaltyReward.upsert({
+    where: { rewardId: LOYALTY_REWARD_ID },
+    update: { ownerId, name: "RD$50 de descuento", kind: "FIXED_DISCOUNT", productId: null, discountCents: 5000, pointsCost: 100, active: true },
+    create: { rewardId: LOYALTY_REWARD_ID, ownerId, name: "RD$50 de descuento", kind: "FIXED_DISCOUNT", productId: null, discountCents: 5000, pointsCost: 100 }
+  });
+
+  // Promo determinística PRODUCT: 10% sobre Habichuelas Rojas 1lb (no toca
+  // el Arroz de los tests E2E de venta para no alterar sus totales).
+  const habichuelas = await tx.product.findUnique({
+    where: { branchId_barcode: { branchId, barcode: "8400000000012" } },
+    select: { id: true }
+  });
+  if (habichuelas) {
+    await tx.promotion.upsert({
+      where: { id: PROMO_PERCENT_ID },
+      update: {
+        ownerId,
+        name: "10% en Habichuelas",
+        kind: "PERCENT_OFF",
+        scope: "PRODUCT",
+        productId: habichuelas.id,
+        percentOffCents: 1000,
+        fixedOffCents: null,
+        buyQty: null,
+        getQty: null,
+        active: true,
+        startsAt: null,
+        endsAt: null
+      },
+      create: {
+        id: PROMO_PERCENT_ID,
+        ownerId,
+        name: "10% en Habichuelas",
+        kind: "PERCENT_OFF",
+        scope: "PRODUCT",
+        productId: habichuelas.id,
+        percentOffCents: 1000,
+        fixedOffCents: null,
+        buyQty: null,
+        getQty: null,
+        active: true
+      }
+    });
   }
 }
 

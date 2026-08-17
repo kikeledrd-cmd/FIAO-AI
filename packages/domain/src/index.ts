@@ -36,3 +36,27 @@ export {
   computeExpectedCash
 } from "./cash/cash-policy";
 export type { ExpectedCashInput } from "./cash/cash-policy";
+export {
+  addReservation,
+  assertApartadoCreateValid,
+  assertApartadoLineValid,
+  assertApartadoTransitionValid,
+  availableQuantity,
+  releaseReservation
+} from "./apartado/apartado-policy";
+export type { ApartadoStatus } from "./apartado/apartado-policy";
+export {
+  assertRedemptionAllowed,
+  computeLoyaltyBalance,
+  computePointsEarned,
+  loyaltyExpiresAt
+} from "./loyalty/loyalty-policy";
+export type { LoyaltyMovementType } from "./loyalty/loyalty-policy";
+export { applyPromotions } from "./promotions/promotion-policy";
+export type {
+  DiscountedCartLine,
+  PromotionInput,
+  PromotionKind,
+  PromotionResult,
+  PromotionScope
+} from "./promotions/promotion-policy";

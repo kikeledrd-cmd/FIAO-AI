@@ -189,6 +189,43 @@ export function reduceCashMovementChange(change: SyncChangeRecord): ProjectionRo
   };
 }
 
+/** Apartado (APARTADO_CREATE/COMPLETE/CANCEL → upsert del estado). */
+export function reduceApartadoChange(change: SyncChangeRecord): ProjectionRowValue {
+  if (change.type !== "APARTADO") throw new Error("UNKNOWN_SYNC_CHANGE_TYPE");
+  const payload = asRecord(change.payload);
+  const apartadoId = payload.apartadoId;
+  if (typeof apartadoId !== "string" || apartadoId.length === 0) {
+    throw new Error("INVALID_SYNC_CHANGE_PAYLOAD");
+  }
+  return {
+    key: `${change.ownerId}:${change.branchId}:APARTADO:${apartadoId}`,
+    ownerId: change.ownerId,
+    branchId: change.branchId,
+    type: change.type,
+    cursor: change.cursor,
+    payload: change.payload
+  };
+}
+
+/** Movimiento del ledger de puntos (LOYALTY → append-only). */
+export function reduceLoyaltyChange(change: SyncChangeRecord): ProjectionRowValue {
+  if (change.type !== "LOYALTY") throw new Error("UNKNOWN_SYNC_CHANGE_TYPE");
+  const payload = asRecord(change.payload);
+  const movementId = payload.movementId;
+  const customerId = payload.customerId;
+  if (typeof movementId !== "string" || movementId.length === 0 || typeof customerId !== "string" || customerId.length === 0) {
+    throw new Error("INVALID_SYNC_CHANGE_PAYLOAD");
+  }
+  return {
+    key: `${change.ownerId}:${change.branchId}:LOYALTY:${movementId}`,
+    ownerId: change.ownerId,
+    branchId: change.branchId,
+    type: change.type,
+    cursor: change.cursor,
+    payload: change.payload
+  };
+}
+
 export function reduceChange(change: SyncChangeRecord): ProjectionRowValue {
   switch (change.type) {
     case "NOOP":
@@ -214,6 +251,10 @@ export function reduceChange(change: SyncChangeRecord): ProjectionRowValue {
     case "CASH_WITHDRAWAL":
     case "CASH_INJECTION":
       return reduceCashMovementChange(change);
+    case "APARTADO":
+      return reduceApartadoChange(change);
+    case "LOYALTY":
+      return reduceLoyaltyChange(change);
     default:
       throw new Error("UNKNOWN_SYNC_CHANGE_TYPE");
   }

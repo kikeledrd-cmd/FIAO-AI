@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { CatalogProduct, SaleLine, SalePayment, SalePaymentMethod } from "@fiao/contracts/sales";
+import type { Promotion } from "@fiao/contracts/promotions";
+import { applyPromotions } from "@fiao/domain/promotions/promotion-policy";
 import { subtotalCents } from "@fiao/domain/sales/sale-policy";
 import { useAppShell } from "@/components/app-shell";
 import { useSync } from "@/features/sync/sync-provider";
@@ -14,6 +16,7 @@ import {
 } from "@/lib/offline/catalog";
 import { listCustomersLocally, loadCustomersFromServer, saveCustomersLocally, type CustomerWithBalance } from "@/lib/offline/customers";
 import { requestOwnerAuthorization } from "@/lib/offline/owner-authorize";
+import { listPromotionsLocally, loadPromotionsFromServer, savePromotionsLocally } from "@/lib/offline/promotions";
 import { syncNow } from "@/lib/offline/sync-client";
 import { applySignedStockDeltas } from "@/lib/offline/catalog";
 import { ReceiptView } from "./receipt";
@@ -35,7 +38,8 @@ const PAYMENT_LABEL: Record<SalePaymentMethod, string> = {
   CASH: "Efectivo",
   TRANSFER: "Transferencia",
   CARD: "Tarjeta",
-  FIADO: "Fiado"
+  FIADO: "Fiado",
+  APARTADO_CREDIT: "Apartado"
 };
 
 export function SalesScreen() {
@@ -43,6 +47,7 @@ export function SalesScreen() {
   const { syncing, sync } = useSync();
   const [products, setProducts] = useState<CatalogProduct[]>([]);
   const [customers, setCustomers] = useState<CustomerWithBalance[]>([]);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
@@ -115,6 +120,32 @@ export function SalesScreen() {
     };
   }, [activeBranchId]);
 
+  useEffect(() => {
+    let cancelled = false;
+    async function loadPromotions() {
+      try {
+        if (navigator.onLine) {
+          const fresh = await loadPromotionsFromServer(activeBranchId);
+          if (cancelled) return;
+          setPromotions(fresh);
+          await savePromotionsLocally(fresh).catch(() => undefined);
+        } else {
+          const local = await listPromotionsLocally(user.ownerId);
+          if (cancelled) return;
+          setPromotions(local);
+        }
+      } catch {
+        if (cancelled) return;
+        const local = await listPromotionsLocally(user.ownerId).catch(() => []);
+        setPromotions(local);
+      }
+    }
+    void loadPromotions();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBranchId, user.ownerId]);
+
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return products;
@@ -143,6 +174,27 @@ export function SalesScreen() {
       return 0;
     }
   }, [cartLines]);
+
+  // Promociones determinísticas (spec §8): descuento en vivo computado con la
+  // función pura del dominio; el servidor lo valida y rechaza si hay desajuste.
+  const promoResult = useMemo(() => {
+    if (cartLines.length === 0 || promotions.length === 0) {
+      return { totalDiscountCents: 0, appliedPromotionIds: [] as string[] };
+    }
+    return applyPromotions(
+      cartLines.map((line) => ({
+        productId: line.product.id,
+        quantity: line.quantity,
+        priceCents: line.product.priceCents
+      })),
+      promotions,
+      new Date()
+    );
+  }, [cartLines, promotions]);
+
+  const discountCents = promoResult.totalDiscountCents;
+  const promotionIds = promoResult.appliedPromotionIds;
+  const payableCents = Math.max(0, totalCents - discountCents);
 
   function addToCart(product: CatalogProduct) {
     setCart((current) => {
@@ -186,7 +238,14 @@ export function SalesScreen() {
       const saleId = crypto.randomUUID();
       await enqueueOperation({
         type: "SALE",
-        payload: { saleId, customerId, lines, payments },
+        payload: {
+          saleId,
+          customerId,
+          lines,
+          payments,
+          ...(discountCents > 0 ? { discountCents } : {}),
+          ...(promotionIds.length > 0 ? { promotionIds } : {})
+        },
         ownerId: user.ownerId,
         branchId: activeBranchId,
         actorUserId: user.id,
@@ -224,7 +283,7 @@ export function SalesScreen() {
       }
       setReceipt({
         saleId,
-        totalCents,
+        totalCents: payableCents,
         methodLabel,
         lines: lines.map((line) => ({ productId: line.productId, quantity: line.quantity })),
         fiadoCents,
@@ -365,8 +424,13 @@ export function SalesScreen() {
           </ul>
           <div className="pos-total-row">
             <span>Total</span>
-            <strong>{formatMoneyCents(totalCents)}</strong>
+            <strong>{formatMoneyCents(payableCents)}</strong>
           </div>
+          {discountCents > 0 ? (
+            <p className="pos-change">
+              Descuento aplicado: <strong>{formatMoneyCents(discountCents)}</strong>
+            </p>
+          ) : null}
           <button type="button" className="pos-clear" onClick={clearCart}>Vaciar carrito</button>
         </div>
       ) : null}
@@ -387,7 +451,7 @@ export function SalesScreen() {
 
       {cartLines.length > 0 ? (
         <div className="pos-checkout-bar">
-          <strong>{formatMoneyCents(totalCents)}</strong>
+          <strong>{formatMoneyCents(payableCents)}</strong>
           <button type="button" className="pos-pay" onClick={() => setPaying(true)} disabled={submitting}>
             Cobrar
           </button>
@@ -396,7 +460,8 @@ export function SalesScreen() {
 
       {paying ? (
         <PaymentSheet
-          totalCents={totalCents}
+          totalCents={payableCents}
+          discountCents={discountCents}
           customers={customers}
           online={online}
           syncing={syncing}
@@ -485,6 +550,7 @@ function decrementQuantity(quantity: string): string {
 
 function PaymentSheet({
   totalCents,
+  discountCents,
   customers,
   online,
   syncing,
@@ -493,6 +559,7 @@ function PaymentSheet({
   onConfirm
 }: {
   totalCents: number;
+  discountCents: number;
   customers: CustomerWithBalance[];
   online: boolean;
   syncing: boolean;
@@ -542,6 +609,11 @@ function PaymentSheet({
     <div className="pos-modal-backdrop" role="presentation">
       <div className="pos-modal" role="dialog" aria-modal="true" aria-label="Cobrar venta">
         <h2>Cobrar {formatMoneyCents(totalCents)}</h2>
+        {discountCents > 0 ? (
+          <p className="pos-change">
+            Descuento aplicado: <strong>{formatMoneyCents(discountCents)}</strong>
+          </p>
+        ) : null}
 
         <div className="pos-methods">
           {(Object.keys(PAYMENT_LABEL) as SalePaymentMethod[]).map((option) => (

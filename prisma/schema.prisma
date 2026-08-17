@@ -55,6 +55,12 @@ model OwnerAccount {
   purchaseLines       PurchaseLine[]
   cashSessions        CashSession[]
   cashMovements       CashMovement[]
+  apartados           Apartado[]
+  apartadoLines       ApartadoLine[]
+  loyaltyConfig       LoyaltyConfig?
+  loyaltyMovements    LoyaltyMovement[]
+  loyaltyRewards      LoyaltyReward[]
+  promotions          Promotion[]
 }
 
 model Branch {
@@ -84,6 +90,9 @@ model Branch {
   purchaseLines       PurchaseLine[]
   cashSessions        CashSession[]
   cashMovements       CashMovement[]
+  apartados           Apartado[]
+  apartadoLines       ApartadoLine[]
+  loyaltyMovements    LoyaltyMovement[]
 
   @@index([ownerId, active])
 }
@@ -101,6 +110,7 @@ model User {
   owner                OwnerAccount         @relation(fields: [ownerId], references: [id], onDelete: Restrict)
   branchAssignments    UserBranch[]
   devices              Device[]
+  apartados            Apartado[]           @relation("ApartadoActor")
   sessions             Session[]
   authorizationsIssued OwnerAuthorization[] @relation("OwnerAuthorizationAuthorizer")
   auditEvents          AuditEvent[]         @relation("AuditActor")
@@ -138,6 +148,7 @@ model Device {
   sessions         Session[]
   auditEvents      AuditEvent[]
   clientOperations ClientOperation[]
+  apartados        Apartado[]
   sales            Sale[]
   cashMovements    CashMovement[]
 
@@ -200,31 +211,33 @@ model AuditEvent {
 }
 
 model ClientOperation {
-  id              String          @id @default(uuid()) @db.Uuid
-  ownerId         String          @db.Uuid
-  branchId        String          @db.Uuid
-  operationId     String          @db.Uuid
-  actorUserId     String          @db.Uuid
-  deviceId        String          @db.Uuid
-  type            String
-  occurredAt      DateTime
-  baseCursor      BigInt?
-  payload         Json
-  status          OperationStatus?
-  result          Json?
-  latestCursor    BigInt?
-  createdAt       DateTime        @default(now())
-  owner           OwnerAccount    @relation(fields: [ownerId], references: [id], onDelete: Restrict)
-  branch          Branch          @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  actor           User            @relation("OperationActor", fields: [actorUserId], references: [id], onDelete: Restrict)
-  device          Device          @relation(fields: [deviceId], references: [id], onDelete: Restrict)
-  syncChanges     SyncChange[]
-  conflicts       SyncConflict[]
-  stockMovements  StockMovement[]
-  sales           Sale[]
-  creditMovements CreditMovement[]
-  purchases       Purchase[]
-  cashMovements   CashMovement[]
+  id               String            @id @default(uuid()) @db.Uuid
+  ownerId          String            @db.Uuid
+  branchId         String            @db.Uuid
+  operationId      String            @db.Uuid
+  actorUserId      String            @db.Uuid
+  deviceId         String            @db.Uuid
+  type             String
+  occurredAt       DateTime
+  baseCursor       BigInt?
+  payload          Json
+  status           OperationStatus?
+  result           Json?
+  latestCursor     BigInt?
+  createdAt        DateTime          @default(now())
+  owner            OwnerAccount      @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch           Branch            @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  actor            User              @relation("OperationActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  device           Device            @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  syncChanges      SyncChange[]
+  conflicts        SyncConflict[]
+  stockMovements   StockMovement[]
+  sales            Sale[]
+  creditMovements  CreditMovement[]
+  purchases        Purchase[]
+  cashMovements    CashMovement[]
+  apartados        Apartado[]
+  loyaltyMovements LoyaltyMovement[]
 
   @@unique([ownerId, operationId])
   @@index([ownerId, branchId, createdAt])
@@ -265,23 +278,26 @@ model SyncConflict {
 
 /// Catálogo de productos por sucursal. El precio vive en centavos.
 model Product {
-  id           String          @id @default(uuid()) @db.Uuid
-  ownerId      String          @db.Uuid
-  branchId     String          @db.Uuid
-  name         String          @db.VarChar(120)
-  barcode      String?         @db.VarChar(64)
-  priceCents   Int
-  costCents    Int             @default(0)
-  stockControl Boolean         @default(true)
-  unitLabel    String          @default("und") @db.VarChar(16)
-  active       Boolean         @default(true)
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-  owner        OwnerAccount    @relation(fields: [ownerId], references: [id], onDelete: Restrict)
-  branch       Branch          @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  stock        ProductStock?
-  movements    StockMovement[]
-  purchases    PurchaseLine[]
+  id            String          @id @default(uuid()) @db.Uuid
+  ownerId       String          @db.Uuid
+  branchId      String          @db.Uuid
+  name          String          @db.VarChar(120)
+  barcode       String?         @db.VarChar(64)
+  priceCents    Int
+  costCents     Int             @default(0)
+  stockControl  Boolean         @default(true)
+  unitLabel     String          @default("und") @db.VarChar(16)
+  active        Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  owner         OwnerAccount    @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch        Branch          @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  stock         ProductStock?
+  movements     StockMovement[]
+  purchases     PurchaseLine[]
+  apartadoLines ApartadoLine[]
+  rewards       LoyaltyReward[]
+  promotions    Promotion[]
 
   @@unique([branchId, barcode])
   @@index([ownerId, branchId, active])
@@ -289,14 +305,16 @@ model Product {
 
 /// Proyección de stock a la mano (cantidad decimal fija como string).
 model ProductStock {
-  id        String  @id @default(uuid()) @db.Uuid
-  ownerId   String  @db.Uuid
-  branchId  String  @db.Uuid
-  productId String  @unique @db.Uuid
-  onHand    String  @default("0")
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  id        String       @id @default(uuid()) @db.Uuid
+  ownerId   String       @db.Uuid
+  branchId  String       @db.Uuid
+  productId String       @unique @db.Uuid
+  onHand    String       @default("0")
+  /// Stock reservado por apartados/pedidos (spec §9.7): disponible = onHand − reserved.
+  reserved  String       @default("0")
+  product   Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
   owner     OwnerAccount @relation(fields: [ownerId], references: [id], onDelete: Restrict)
-  branch    Branch  @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  branch    Branch       @relation(fields: [branchId], references: [id], onDelete: Restrict)
 
   @@index([ownerId, branchId])
 }
@@ -304,18 +322,18 @@ model ProductStock {
 /// Proveedor de una sucursal. Datos maestros; el histórico de compras vive
 /// en Purchase (append-only).
 model Supplier {
-  id          String          @id @default(uuid()) @db.Uuid
-  ownerId     String          @db.Uuid
-  branchId    String          @db.Uuid
-  supplierId  String          @unique @db.Uuid
-  name        String          @db.VarChar(120)
-  phoneE164   String?         @db.VarChar(16)
-  active      Boolean         @default(true)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  owner       OwnerAccount    @relation(fields: [ownerId], references: [id], onDelete: Restrict)
-  branch      Branch          @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  purchases   Purchase[]
+  id         String       @id @default(uuid()) @db.Uuid
+  ownerId    String       @db.Uuid
+  branchId   String       @db.Uuid
+  supplierId String       @unique @db.Uuid
+  name       String       @db.VarChar(120)
+  phoneE164  String?      @db.VarChar(16)
+  active     Boolean      @default(true)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  owner      OwnerAccount @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch     Branch       @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  purchases  Purchase[]
 
   @@index([ownerId, branchId, active])
 }
@@ -323,21 +341,21 @@ model Supplier {
 /// Compra a proveedor append-only. Por línea se registra cantidad y costo
 /// unitario; Product.costCents es la proyección del costo promedio móvil.
 model Purchase {
-  id                String          @id @default(uuid()) @db.Uuid
-  ownerId           String          @db.Uuid
-  branchId          String          @db.Uuid
-  purchaseId        String          @unique @db.Uuid
-  supplierId        String?         @db.Uuid
-  actorUserId       String          @db.Uuid
-  deviceId          String          @db.Uuid
-  clientOperationId String?         @db.Uuid
-  note              String?         @db.VarChar(300)
+  id                String           @id @default(uuid()) @db.Uuid
+  ownerId           String           @db.Uuid
+  branchId          String           @db.Uuid
+  purchaseId        String           @unique @db.Uuid
+  supplierId        String?          @db.Uuid
+  actorUserId       String           @db.Uuid
+  deviceId          String           @db.Uuid
+  clientOperationId String?          @db.Uuid
+  note              String?          @db.VarChar(300)
   totalCents        Int
   occurredAt        DateTime
-  createdAt         DateTime        @default(now())
-  owner             OwnerAccount    @relation(fields: [ownerId], references: [id], onDelete: Restrict)
-  branch            Branch          @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  supplier          Supplier?       @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  createdAt         DateTime         @default(now())
+  owner             OwnerAccount     @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch            Branch           @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  supplier          Supplier?        @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   lines             PurchaseLine[]
   clientOperation   ClientOperation? @relation(fields: [clientOperationId], references: [id], onDelete: Restrict)
 
@@ -346,36 +364,36 @@ model Purchase {
 
 /// Línea de compra append-only (cantidad + costo unitario en centavos).
 model PurchaseLine {
-  id          String   @id @default(uuid()) @db.Uuid
-  ownerId     String   @db.Uuid
-  branchId    String   @db.Uuid
-  purchaseId  String   @db.Uuid
-  productId   String   @db.Uuid
-  quantity    String   @db.VarChar(32)
-  unitCostCents Int
+  id             String       @id @default(uuid()) @db.Uuid
+  ownerId        String       @db.Uuid
+  branchId       String       @db.Uuid
+  purchaseId     String       @db.Uuid
+  productId      String       @db.Uuid
+  quantity       String       @db.VarChar(32)
+  unitCostCents  Int
   lineTotalCents Int
-  purchase    Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
-  product     Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
-  owner       OwnerAccount @relation(fields: [ownerId], references: [id], onDelete: Restrict)
-  branch      Branch   @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  purchase       Purchase     @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  product        Product      @relation(fields: [productId], references: [id], onDelete: Restrict)
+  owner          OwnerAccount @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch         Branch       @relation(fields: [branchId], references: [id], onDelete: Restrict)
 
   @@index([ownerId, branchId, productId])
 }
 
 /// Movimiento de stock append-only (nunca se borra; se corrige con reversos).
 model StockMovement {
-  id                String          @id @default(uuid()) @db.Uuid
-  ownerId           String          @db.Uuid
-  branchId          String          @db.Uuid
-  productId         String          @db.Uuid
+  id                String           @id @default(uuid()) @db.Uuid
+  ownerId           String           @db.Uuid
+  branchId          String           @db.Uuid
+  productId         String           @db.Uuid
   type              String
-  quantityDelta     String          @db.VarChar(32)
-  clientOperationId String?         @db.Uuid
-  createdAt         DateTime        @default(now())
-  owner             OwnerAccount    @relation(fields: [ownerId], references: [id], onDelete: Restrict)
-  branch            Branch          @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  product           Product         @relation(fields: [productId], references: [id], onDelete: Restrict)
-  clientOperation     ClientOperation? @relation(fields: [clientOperationId], references: [id], onDelete: Restrict)
+  quantityDelta     String           @db.VarChar(32)
+  clientOperationId String?          @db.Uuid
+  createdAt         DateTime         @default(now())
+  owner             OwnerAccount     @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch            Branch           @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  product           Product          @relation(fields: [productId], references: [id], onDelete: Restrict)
+  clientOperation   ClientOperation? @relation(fields: [clientOperationId], references: [id], onDelete: Restrict)
 
   @@index([ownerId, branchId, productId, createdAt])
   @@index([clientOperationId])
@@ -395,6 +413,14 @@ model Sale {
   payments          Json
   subtotalCents     Int
   totalCents        Int
+  /// Descuento de promoción aplicado (determinístico, validado en servidor).
+  discountCents     Int              @default(0)
+  /// IDs de promociones aplicadas (JSON array).
+  promotionIds      Json?
+  /// Redención de lealtad aplicada (JSON: rewardId + pointsCost).
+  reward            Json?
+  /// Apartado que esta venta completa (si nació de un apartado).
+  apartadoId        String?          @db.Uuid
   occurredAt        DateTime
   createdAt         DateTime         @default(now())
   owner             OwnerAccount     @relation(fields: [ownerId], references: [id], onDelete: Restrict)
@@ -403,6 +429,7 @@ model Sale {
   device            Device           @relation(fields: [deviceId], references: [id], onDelete: Restrict)
   clientOperation   ClientOperation? @relation(fields: [clientOperationId], references: [id], onDelete: Restrict)
   customer          Customer?        @relation("SaleCustomer", fields: [customerId], references: [id], onDelete: Restrict)
+  apartado          Apartado?        @relation(fields: [apartadoId], references: [id], onDelete: Restrict)
 
   @@index([ownerId, branchId, createdAt])
 }
@@ -410,21 +437,23 @@ model Sale {
 /// Cliente de una sucursal con límite de crédito. El saldo NUNCA se guarda
 /// como campo: se computa Σ movimientos de crédito (append-only).
 model Customer {
-  id                 String           @id @default(uuid()) @db.Uuid
-  ownerId            String           @db.Uuid
-  branchId           String           @db.Uuid
-  customerId         String           @unique @db.Uuid
-  name               String           @db.VarChar(120)
-  phoneE164          String?          @db.VarChar(16)
-  creditLimitCents   Int              @default(0)
-  defaultPromiseDays Int              @default(7)
-  active             Boolean          @default(true)
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-  owner              OwnerAccount     @relation(fields: [ownerId], references: [id], onDelete: Restrict)
-  branch             Branch           @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  id                 String            @id @default(uuid()) @db.Uuid
+  ownerId            String            @db.Uuid
+  branchId           String            @db.Uuid
+  customerId         String            @unique @db.Uuid
+  name               String            @db.VarChar(120)
+  phoneE164          String?           @db.VarChar(16)
+  creditLimitCents   Int               @default(0)
+  defaultPromiseDays Int               @default(7)
+  active             Boolean           @default(true)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  owner              OwnerAccount      @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch             Branch            @relation(fields: [branchId], references: [id], onDelete: Restrict)
   movements          CreditMovement[]
-  sales              Sale[]           @relation("SaleCustomer")
+  sales              Sale[]            @relation("SaleCustomer")
+  apartados          Apartado[]
+  loyaltyMovements   LoyaltyMovement[]
 
   @@index([ownerId, branchId, active])
 }
@@ -432,25 +461,25 @@ model Customer {
 /// Movimiento de crédito append-only (FIAO_SALE = cargo, ABONO = descargo).
 /// El saldo del cliente = Σ FIAO_SALE − Σ ABONO.
 model CreditMovement {
-  id                String          @id @default(uuid()) @db.Uuid
-  ownerId           String          @db.Uuid
-  branchId          String          @db.Uuid
-  customerId        String          @db.Uuid
+  id                String           @id @default(uuid()) @db.Uuid
+  ownerId           String           @db.Uuid
+  branchId          String           @db.Uuid
+  customerId        String           @db.Uuid
   type              String
   amountCents       Int
-  saleId            String?         @db.Uuid
-  abonoId           String?         @db.Uuid
-  clientOperationId String?         @db.Uuid
+  saleId            String?          @db.Uuid
+  abonoId           String?          @db.Uuid
+  clientOperationId String?          @db.Uuid
   occurredAt        DateTime
-  createdAt         DateTime        @default(now())
-  owner             OwnerAccount    @relation(fields: [ownerId], references: [id], onDelete: Restrict)
-  branch            Branch          @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  customer          Customer        @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  createdAt         DateTime         @default(now())
+  owner             OwnerAccount     @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch            Branch           @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  customer          Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
   clientOperation   ClientOperation? @relation(fields: [clientOperationId], references: [id], onDelete: Restrict)
 
+  @@unique([saleId, type])
   @@index([ownerId, branchId, customerId, createdAt])
   @@index([clientOperationId])
-  @@unique([saleId, type])
 }
 
 /// Sesión de caja: una sola sesión abierta por sucursal (spec §10.1).
@@ -485,28 +514,160 @@ model CashSession {
 /// Movimiento de caja append-only: EXPENSE / WITHDRAWAL / INJECTION /
 /// DIFFERENCE (el cierre registra la diferencia para cuadrar el ledger).
 model CashMovement {
-  id                String          @id @default(uuid()) @db.Uuid
-  ownerId           String          @db.Uuid
-  branchId          String          @db.Uuid
-  sessionId         String          @db.Uuid
-  movementId        String          @unique @db.Uuid
+  id                String           @id @default(uuid()) @db.Uuid
+  ownerId           String           @db.Uuid
+  branchId          String           @db.Uuid
+  sessionId         String           @db.Uuid
+  movementId        String           @unique @db.Uuid
   type              String
   amountCents       Int
-  category          String?         @db.VarChar(60)
-  description       String?         @db.VarChar(300)
-  reason            String?         @db.VarChar(300)
-  actorUserId       String          @db.Uuid
-  deviceId          String          @db.Uuid
-  clientOperationId String?         @db.Uuid
+  category          String?          @db.VarChar(60)
+  description       String?          @db.VarChar(300)
+  reason            String?          @db.VarChar(300)
+  actorUserId       String           @db.Uuid
+  deviceId          String           @db.Uuid
+  clientOperationId String?          @db.Uuid
   occurredAt        DateTime
-  createdAt         DateTime        @default(now())
-  owner             OwnerAccount    @relation(fields: [ownerId], references: [id], onDelete: Restrict)
-  branch            Branch          @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  session           CashSession     @relation(fields: [sessionId], references: [id], onDelete: Restrict)
-  actor             User            @relation("CashMovementActor", fields: [actorUserId], references: [id], onDelete: Restrict)
-  device            Device          @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  createdAt         DateTime         @default(now())
+  owner             OwnerAccount     @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch            Branch           @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  session           CashSession      @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  actor             User             @relation("CashMovementActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  device            Device           @relation(fields: [deviceId], references: [id], onDelete: Restrict)
   clientOperation   ClientOperation? @relation(fields: [clientOperationId], references: [id], onDelete: Restrict)
 
   @@index([ownerId, branchId, sessionId, createdAt])
   @@index([clientOperationId])
+}
+
+/// Apartado append-only: el cliente reserva inventario con un anticipo
+/// (spec §9.7). Los cambios de estado son eventos (ACTIVE → COMPLETED |
+/// CANCELLED); las líneas viven en ApartadoLine.
+model Apartado {
+  id                String           @id @default(uuid()) @db.Uuid
+  ownerId           String           @db.Uuid
+  branchId          String           @db.Uuid
+  apartadoId        String           @unique @db.Uuid
+  customerId        String           @db.Uuid
+  status            String           @default("ACTIVE")
+  depositCents      Int
+  totalCents        Int
+  promiseDate       DateTime?
+  notes             String?          @db.VarChar(300)
+  actorUserId       String           @db.Uuid
+  deviceId          String           @db.Uuid
+  clientOperationId String?          @db.Uuid
+  completedAt       DateTime?
+  cancelledAt       DateTime?
+  occurredAt        DateTime
+  createdAt         DateTime         @default(now())
+  owner             OwnerAccount     @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch            Branch           @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  customer          Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  actor             User             @relation("ApartadoActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  device            Device           @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  clientOperation   ClientOperation? @relation(fields: [clientOperationId], references: [id], onDelete: Restrict)
+  lines             ApartadoLine[]
+  sales             Sale[]
+
+  @@index([ownerId, branchId, status, createdAt])
+  @@index([customerId])
+}
+
+/// Línea de apartado append-only (cantidad + precio al momento de apartar).
+model ApartadoLine {
+  id             String       @id @default(uuid()) @db.Uuid
+  ownerId        String       @db.Uuid
+  branchId       String       @db.Uuid
+  apartadoId     String       @db.Uuid
+  productId      String       @db.Uuid
+  quantity       String       @db.VarChar(32)
+  priceCents     Int
+  lineTotalCents Int
+  apartado       Apartado     @relation(fields: [apartadoId], references: [id], onDelete: Cascade)
+  product        Product      @relation(fields: [productId], references: [id], onDelete: Restrict)
+  owner          OwnerAccount @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch         Branch       @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  @@index([ownerId, branchId, productId])
+}
+
+/// Config de lealtad por owner (spec §8): regla de ganancia y vencimiento.
+/// Singleton por owner (upsert).
+model LoyaltyConfig {
+  id                    String       @id @default(uuid()) @db.Uuid
+  ownerId               String       @unique @db.Uuid
+  enabled               Boolean      @default(true)
+  pointsPerHundredCents Int          @default(100)
+  expiryDays            Int          @default(180)
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  owner                 OwnerAccount @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+}
+
+/// Movimiento del ledger de puntos append-only (EARN/REDEEM/EXPIRE/REVERSAL).
+/// El saldo NUNCA se guarda: se computa Σ deltas no vencidos.
+model LoyaltyMovement {
+  id                String           @id @default(uuid()) @db.Uuid
+  ownerId           String           @db.Uuid
+  branchId          String           @db.Uuid
+  customerId        String           @db.Uuid
+  movementId        String           @unique @db.Uuid
+  type              String
+  pointsDelta       Int
+  saleId            String?          @db.Uuid
+  rewardId          String?          @db.Uuid
+  reason            String?          @db.VarChar(300)
+  expiresAt         DateTime?
+  clientOperationId String?          @db.Uuid
+  occurredAt        DateTime
+  createdAt         DateTime         @default(now())
+  owner             OwnerAccount     @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch            Branch           @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  customer          Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  clientOperation   ClientOperation? @relation(fields: [clientOperationId], references: [id], onDelete: Restrict)
+
+  @@index([ownerId, branchId, customerId, occurredAt])
+  @@index([clientOperationId])
+}
+
+/// Recompensa canjeable por puntos (spec §8: free product / fixed discount).
+model LoyaltyReward {
+  id            String       @id @default(uuid()) @db.Uuid
+  ownerId       String       @db.Uuid
+  rewardId      String       @unique @db.Uuid
+  name          String       @db.VarChar(80)
+  kind          String
+  productId     String?      @db.Uuid
+  discountCents Int?
+  pointsCost    Int
+  active        Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  owner         OwnerAccount @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  product       Product?     @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([ownerId, active])
+}
+
+/// Promoción determinística (spec §8 / roadmap: deterministic promotions).
+/// La función pura del dominio es la única fuente de descuento.
+model Promotion {
+  id              String       @id @default(uuid()) @db.Uuid
+  ownerId         String       @db.Uuid
+  name            String       @db.VarChar(80)
+  kind            String
+  scope           String
+  productId       String?      @db.Uuid
+  percentOffCents Int?
+  fixedOffCents   Int?
+  buyQty          Int?
+  getQty          Int?
+  active          Boolean      @default(true)
+  startsAt        DateTime?
+  endsAt          DateTime?
+  createdAt       DateTime     @default(now())
+  owner           OwnerAccount @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  product         Product?     @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([ownerId, active])
 }
