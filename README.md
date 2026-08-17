@@ -26,11 +26,12 @@ El producto funcional **FIAO MVP V1** está definido y la implementación técni
 - **Inventario y reversos (Task 13)**: `/inventory` con ajuste manual de stock (delta con signo + motivo) protegido por autorización de OWNER; botón **Anular venta** en el recibo del POS que revierte stock y saldo de fiado con trazabilidad; `POST /api/owner/authorize` emite `OwnerAuthorization` por PIN (TTL 5 min) ligada al `operationId`; `STOCK_ADJUSTMENT`/`SALE_REVERSAL` idempotentes y append-only; el sync client aplica los deltas a la réplica local.
 - **Compras y proveedores (Task 14)**: `/suppliers` (alta/edición con sync offline); modal **Registrar compra** en `/inventory` (proveedor opcional, líneas con cantidad y costo unitario, PIN del dueño si cajero); **costo promedio móvil determinístico** (`Product.costCents`) con aritmética entera; `Purchase`/`PurchaseLine`/`Supplier` append-only; `SUPPLIER_UPSERT`/`PURCHASE` idempotentes; Dexie v4 con `suppliers` y deltas PURCHASE (stock + costo) aplicados por el sync client.
 - **Caja (Task 15)**: `/cash` con apertura (float inicial), gastos con límite de cajero (RD$ 1.000) y autorización de OWNER por PIN para retiros/inyecciones/gastos mayores/cierres con diferencia; **arqueo** con efectivo esperado computado (spec §10.5) y movimiento `DIFFERENCE` auditado; una sola sesión abierta por sucursal garantizada por constraint (`openUniqueKey`); `CASH_OPEN`/`CASH_EXPENSE`/`CASH_WITHDRAWAL`/`CASH_INJECTION`/`CASH_CLOSE` idempotentes y append-only; Dexie v5 con `cashSessions`/`cashMovements` y `GET /api/cash`.
+- **Apartados, lealtad y promociones (Task 16)**: `/apartados` con reserva de inventario (`ProductStock.reserved`), anticipo a caja y completado/cancelación (crédito a favor + PIN del dueño); **lealtad** con ledger de puntos append-only (`EARN`/`REDEEM`/`REVERSAL`, saldo computado con vencimiento) y catálogo de recompensas (`FREE_PRODUCT`/`FIXED_DISCOUNT`); **promociones determinísticas** aplicadas en vivo en el POS (`PERCENT_OFF`/`FIXED_OFF`/`BUNDLE_BUY_X_GET_Y`, recompute server-side con `PROMOTION_MISMATCH`); `GET /api/apartados|loyalty|rewards|promotions`; Dexie v6 con tablas de apartados/lealtad/promos.
 - Documentación completa del Blueprint, roadmap, handoff y runbook local.
 
 ### Próxima tarea
 
-**Task 16 — Devoluciones/apartados y lealtad/promociones (Plan 2):** apartados, ledger de puntos y promociones determinísticas. Ver `docs/AI_HANDOFF.md`.
+**Plan 3 — Pedidos por WhatsApp + delivery básico:** estado de pedido, reservas, webhook de Meta y entrega. Ver `docs/AI_HANDOFF.md`.
 
 ## Documentación obligatoria
 

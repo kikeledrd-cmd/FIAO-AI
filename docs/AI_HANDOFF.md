@@ -1,6 +1,6 @@
 # FIAO AI — AI Handoff
 
-Fecha de corte: **2026-08-16**
+Fecha de corte: **2026-08-17**
 
 ## 1. Objetivo del proyecto
 
@@ -18,12 +18,12 @@ El roadmap técnico está en:
 
 El plan que se está ejecutando actualmente está en:
 
-`docs/superpowers/plans/2026-08-13-fiao-cash-register.md`
+`docs/superpowers/plans/2026-08-13-fiao-apartado-loyalty.md`
 
 > Plan 1 (foundation/sync/auth/PWA) completado; Tasks 11 (POS ventas), 12
-> (fiado/clientes), 13 (inventario/reversos), 14 (compras/proveedores) y 15
-> (caja) completadas; la siguiente tarea es Task 16 (devoluciones/apartados y
-> lealtad/promociones).
+> (fiado/clientes), 13 (inventario/reversos), 14 (compras/proveedores), 15
+> (caja) y 16 (devoluciones/apartados y lealtad/promociones) completadas;
+> la siguiente tarea es Plan 3 (pedidos por WhatsApp + delivery básico).
 
 Si código y memoria conversacional difieren, primero revisar estos documentos y después el historial Git.
 
@@ -259,6 +259,52 @@ Requisitos principales:
 >   number rechaza comas; el botón Confirmar se deshabilita hasta escribir el
 >   PIN cuando hay diferencia; `exactOptionalPropertyTypes` exige spreads
 >   condicionales en los patches de la UI.
+
+### Siguiente tarea (Plan 2)
+
+**Task 16: Devoluciones/apartados y lealtad/promociones.**
+
+> ✅ **COMPLETADA 2026-08-17.** Verificación completa pasó en esta máquina
+> (Node 22 + PostgreSQL 18 en Docker): `lint` (0 errores, 1 warning
+> preexistente postcss), `typecheck`, `test` (172), `test:integration` (89),
+> `build` y `test:e2e` (22/22 en Chromium móvil).
+> Notas de ejecución:
+>
+> - Fase A (apartados, spec §9.7): dominio `domain/apartado/apartado-policy.ts`
+>   (disponible = onHand − reserved, validación de líneas/anticipo/transiciones),
+>   contratos `contracts/apartado.ts`, migración `commerce_apartado_loyalty`
+>   (`Apartado`/`ApartadoLine`/`ProductStock.reserved`); procesadores
+>   `process-apartado-create.ts` (reserva + anticipo INJECTION a caja, exige
+>   sesión abierta), `process-apartado-complete.ts` (venta real con pago
+>   `APARTADO_CREDIT` + resto, consume reserva) y `process-apartado-cancel.ts`
+>   (libera reserva, crédito a favor `APARTADO_REFUND` + retiro de caja, PIN
+>   del dueño si cajero); `GET /api/apartados` + pantalla `/apartados`
+>   (crear/completar/cancelar).
+> - Fase B (lealtad + promos, spec §8): `domain/loyalty/loyalty-policy.ts`
+>   (1 punto por RD$1 con la tasa demo 100; saldo computado con vencimiento),
+>   `domain/promotions/promotion-policy.ts` (`applyPromotions` pura
+>   determinística: PERCENT_OFF/FIXED_OFF/BUNDLE, PRODUCT/TOTAL, no apilable);
+>   `process-sale.ts` valida promos con recompute server-side
+>   (`PROMOTION_MISMATCH`), redención (`INVALID_REWARD`) y earn/redeem de
+>   puntos (`LOYALTY`); `process-sale-reversal.ts` revierte puntos (`REVERSAL`);
+>   `GET /api/loyalty` (config + saldo por cliente), `GET /api/rewards`,
+>   `GET /api/promotions`; pantalla `/loyalty` (config, recompensas, saldo e
+>   historial de puntos por cliente).
+> - POS: promos aplicadas en vivo (descuento determinístico + payload
+>   `discountCents`/`promotionIds`); el recibo muestra el total pagado.
+> - sync: `APARTADO_CREATE/COMPLETE/CANCEL` en `COMMERCE_OPERATION_TYPES`;
+>   `reduceApartadoChange`/`reduceLoyaltyChange`; Dexie v6 (`apartados`,
+>   `loyaltyMovements`, `loyaltyRewards`, `loyaltyConfig`, `promotions`); el
+>   sync client ajusta reservas (reserved ±) y aplica movimientos LOYALTY;
+>   `CatalogProduct.reserved` expuesto en `GET /api/catalog` y catálogo local.
+> - E2E `apartado-loyalty.spec.ts`: crear/completar apartado, cancelar,
+>   promo 10% en el POS y venta a fiado que genera puntos.
+> - gotchas: `Sale.apartadoId` tiene FK `ON DELETE RESTRICT` → el seed debe
+>   borrar `sale` antes que `apartado`; `test:integration` trunca la base de
+>   desarrollo → re-seedear antes de `test:e2e`; los propósitos de autorización
+>   OWNER se ampliaron (`PURCHASE`/`CASH_*`/`APARTADO_CANCEL`) en el schema del
+>   endpoint `/api/owner/authorize`; `applyPromotions` es la única fuente de
+>   descuento (el servidor recomputa y rechaza desajustes).
 
 ## 4. Reglas de arquitectura
 
