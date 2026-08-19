@@ -18,7 +18,8 @@ const PLAN2_MODULES: { key: string; label: string; hint: string; href?: string }
   { key: "loyalty", label: "Puntos", hint: "Lealtad y recompensas", href: "/loyalty" },
   { key: "suppliers", label: "Proveedores", hint: "Compras y costos", href: "/suppliers" },
   { key: "inventory", label: "Inventario", hint: "Productos y stock", href: "/inventory" },
-  { key: "cash", label: "Caja", hint: "Apertura y arqueo", href: "/cash" }
+  { key: "cash", label: "Caja", hint: "Apertura y arqueo", href: "/cash" },
+  { key: "ai", label: "FIAO AI", hint: "Pregúntale a tu negocio", href: "/ai" }
 ] as const;
 
 export function HomeScreen() {

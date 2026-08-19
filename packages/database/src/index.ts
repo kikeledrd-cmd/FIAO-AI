@@ -34,3 +34,22 @@ export { ApartadoRepository } from "./repositories/apartado-repository";
 export { LoyaltyRepository } from "./repositories/loyalty-repository";
 export type { CustomerLoyalty } from "./repositories/loyalty-repository";
 export { OrderRepository } from "./repositories/order-repository";
+export { AiAuditRepository, AiQueryRepository } from "./repositories/ai-repository";
+export type {
+  AiActionTokenRow,
+  AiAuditLogInput,
+  CashStatus,
+  CreditSummary,
+  CustomerMatch,
+  InventoryStatusItem,
+  OrdersStatus,
+  SalesSummary
+} from "./repositories/ai-repository";
+export { buildActionPlan, executeActionPlan, runAiQuery } from "./ai/tools";
+export type {
+  AiActionParams,
+  AiActionPlan,
+  AiActionPlanResult,
+  AiLabel,
+  AiQueryResult
+} from "./ai/tools";

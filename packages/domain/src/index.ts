@@ -74,3 +74,25 @@ export type {
   OrderCatalogItem,
   OrderExtractionResult
 } from "./orders/order-extraction";
+export {
+  AI_ACTION_TOOLS,
+  AI_PROTECTED_TOOLS,
+  AI_QUERY_TOOLS,
+  AI_RESPONSE_LABELS,
+  detectAnomalousAmount,
+  extractAmountCents,
+  isAiActionTool,
+  isAiQueryTool,
+  isProtectedAiTool,
+  normalizeAiText,
+  parseAiIntent
+} from "./ai/ai-intent";
+export type {
+  AiActionTool,
+  AiIntent,
+  AiIntentKind,
+  AiProtectedTool,
+  AiQueryTool,
+  AiResponseLabel,
+  AiToolName
+} from "./ai/ai-intent";

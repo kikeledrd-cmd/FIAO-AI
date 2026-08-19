@@ -50,6 +50,8 @@ async function seed() {
     await tx.supplier.deleteMany({ where: { ownerId: ownerAccount.id } });
     await tx.stockMovement.deleteMany({ where: { ownerId: ownerAccount.id } });
     await tx.auditEvent.deleteMany({ where: { ownerId: ownerAccount.id } });
+    await tx.aiAuditLog.deleteMany({ where: { ownerId: ownerAccount.id } });
+    await tx.aiActionToken.deleteMany({ where: { ownerId: ownerAccount.id } });
     await tx.clientOperation.deleteMany({ where: { ownerId: ownerAccount.id } });
     await tx.customer.deleteMany({ where: { ownerId: ownerAccount.id } });
     await tx.productStock.deleteMany({ where: { ownerId: ownerAccount.id } });

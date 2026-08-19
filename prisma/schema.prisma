@@ -62,6 +62,8 @@ model OwnerAccount {
   loyaltyRewards      LoyaltyReward[]
   promotions          Promotion[]
   orders              Order[]
+  aiAuditLogs         AiAuditLog[]
+  aiActionTokens      AiActionToken[]
 }
 
 model Branch {
@@ -95,6 +97,8 @@ model Branch {
   apartadoLines       ApartadoLine[]
   loyaltyMovements    LoyaltyMovement[]
   orders              Order[]
+  aiAuditLogs         AiAuditLog[]
+  aiActionTokens      AiActionToken[]
 
   @@index([ownerId, active])
 }
@@ -122,6 +126,8 @@ model User {
   cashSessionsClosed   CashSession[]        @relation("CashSessionClosedBy")
   cashMovements        CashMovement[]       @relation("CashMovementActor")
   ordersActor          Order[]              @relation("OrderActor")
+  aiAuditLogs          AiAuditLog[]         @relation("AiAuditActor")
+  aiActionTokens       AiActionToken[]      @relation("AiActionTokenActor")
 
   @@index([ownerId, role, active])
 }
@@ -683,32 +689,32 @@ model Promotion {
 /// NEW -> PREPARING -> READY -> ON_THE_WAY -> DELIVERED, con CANCELLED en
 /// cualquier punto no terminal. Append-only; la venta final se crea en DELIVER.
 model Order {
-  id                String           @id @default(uuid()) @db.Uuid
-  ownerId           String           @db.Uuid
-  branchId          String           @db.Uuid
-  orderId           String           @unique @db.Uuid
+  id                String               @id @default(uuid()) @db.Uuid
+  ownerId           String               @db.Uuid
+  branchId          String               @db.Uuid
+  orderId           String               @unique @db.Uuid
   source            String
-  status            String           @default("NEW")
-  customerId        String?          @db.Uuid
-  actorUserId       String           @db.Uuid
-  deviceId          String           @db.Uuid
-  clientOperationId String?          @db.Uuid
+  status            String               @default("NEW")
+  customerId        String?              @db.Uuid
+  actorUserId       String               @db.Uuid
+  deviceId          String               @db.Uuid
+  clientOperationId String?              @db.Uuid
   lines             Json
   totalCents        Int
-  deliveryName      String?          @db.VarChar(80)
-  deliveryAddress   String?          @db.VarChar(300)
-  deliveryFeeCents  Int              @default(0)
-  notes             String?          @db.VarChar(300)
-  exceptionReason   String?          @db.VarChar(300)
-  saleId            String?          @db.Uuid
+  deliveryName      String?              @db.VarChar(80)
+  deliveryAddress   String?              @db.VarChar(300)
+  deliveryFeeCents  Int                  @default(0)
+  notes             String?              @db.VarChar(300)
+  exceptionReason   String?              @db.VarChar(300)
+  saleId            String?              @db.Uuid
   occurredAt        DateTime
-  createdAt         DateTime         @default(now())
-  owner             OwnerAccount     @relation(fields: [ownerId], references: [id], onDelete: Restrict)
-  branch            Branch           @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  customer          Customer?        @relation("OrderCustomer", fields: [customerId], references: [id], onDelete: Restrict)
-  actor             User             @relation("OrderActor", fields: [actorUserId], references: [id], onDelete: Restrict)
-  device            Device           @relation(fields: [deviceId], references: [id], onDelete: Restrict)
-  clientOperation   ClientOperation? @relation(fields: [clientOperationId], references: [id], onDelete: Restrict)
+  createdAt         DateTime             @default(now())
+  owner             OwnerAccount         @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch            Branch               @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  customer          Customer?            @relation("OrderCustomer", fields: [customerId], references: [id], onDelete: Restrict)
+  actor             User                 @relation("OrderActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  device            Device               @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  clientOperation   ClientOperation?     @relation(fields: [clientOperationId], references: [id], onDelete: Restrict)
   orderLines        OrderLine[]
   timeline          OrderTimelineEvent[]
 
@@ -718,31 +724,78 @@ model Order {
 
 /// Linea de pedido (append-only).
 model OrderLine {
-  id             String       @id @default(uuid()) @db.Uuid
-  ownerId        String       @db.Uuid
-  branchId       String       @db.Uuid
-  orderId        String       @db.Uuid
-  productId      String       @db.Uuid
-  quantity       String       @db.VarChar(32)
+  id             String  @id @default(uuid()) @db.Uuid
+  ownerId        String  @db.Uuid
+  branchId       String  @db.Uuid
+  orderId        String  @db.Uuid
+  productId      String  @db.Uuid
+  quantity       String  @db.VarChar(32)
   priceCents     Int
   lineTotalCents Int
-  order          Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product        Product      @relation(fields: [productId], references: [id], onDelete: Restrict)
+  order          Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product        Product @relation(fields: [productId], references: [id], onDelete: Restrict)
 
   @@index([ownerId, branchId, productId])
 }
 
 /// Evento de linea de tiempo de un pedido (append-only).
 model OrderTimelineEvent {
-  id          String       @id @default(uuid()) @db.Uuid
-  ownerId     String       @db.Uuid
-  branchId    String       @db.Uuid
-  orderId     String       @db.Uuid
+  id          String   @id @default(uuid()) @db.Uuid
+  ownerId     String   @db.Uuid
+  branchId    String   @db.Uuid
+  orderId     String   @db.Uuid
   status      String
-  actorUserId String?      @db.Uuid
-  note        String?      @db.VarChar(300)
+  actorUserId String?  @db.Uuid
+  note        String?  @db.VarChar(300)
   occurredAt  DateTime
-  order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([ownerId, branchId, orderId, occurredAt])
+}
+
+/// Audit log de FIAO AI (append-only): comando/transcripción, intent
+/// parseado, actor, confirmación, autorización y resultado.
+model AiAuditLog {
+  id                String       @id @default(uuid()) @db.Uuid
+  ownerId           String       @db.Uuid
+  branchId          String       @db.Uuid
+  actorUserId       String       @db.Uuid
+  actorRole         String       @db.VarChar(16)
+  commandText       String       @db.VarChar(1000)
+  transcription     String?      @db.VarChar(1000)
+  intentKind        String       @db.VarChar(16)
+  intentTool        String       @db.VarChar(40)
+  label             String?      @db.VarChar(20)
+  confirmationToken String?      @db.Uuid
+  authorizationId   String?      @db.Uuid
+  resultJson        String?
+  createdAt         DateTime     @default(now())
+  owner             OwnerAccount @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch            Branch       @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  actor             User         @relation("AiAuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([ownerId, branchId, createdAt])
+  @@index([actorUserId])
+}
+
+/// Token de confirmación de una acción de IA (un solo uso). Se emite al
+/// preparar una acción y se consume al confirmarla/ejecutarla.
+model AiActionToken {
+  id               String       @id @default(uuid()) @db.Uuid
+  ownerId          String       @db.Uuid
+  branchId         String       @db.Uuid
+  tokenId          String       @unique @db.Uuid
+  actorUserId      String       @db.Uuid
+  intentTool       String       @db.VarChar(40)
+  payload          Json
+  requiresOwnerPin Boolean      @default(false)
+  consumedAt       DateTime?
+  expiresAt        DateTime
+  createdAt        DateTime     @default(now())
+  owner            OwnerAccount @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch           Branch       @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  actor            User         @relation("AiActionTokenActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([ownerId, branchId, createdAt])
+  @@index([actorUserId, consumedAt])
 }
