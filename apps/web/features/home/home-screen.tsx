@@ -14,6 +14,7 @@ const PLAN2_MODULES: { key: string; label: string; hint: string; href?: string }
   { key: "sell", label: "Vender", hint: "POS rápido", href: "/sell" },
   { key: "customers", label: "Clientes", hint: "Fiado y abonos", href: "/customers" },
   { key: "apartados", label: "Apartados", hint: "Reserva y anticipos", href: "/apartados" },
+  { key: "pedidos", label: "Pedidos", hint: "WhatsApp y entrega", href: "/pedidos" },
   { key: "loyalty", label: "Puntos", hint: "Lealtad y recompensas", href: "/loyalty" },
   { key: "suppliers", label: "Proveedores", hint: "Compras y costos", href: "/suppliers" },
   { key: "inventory", label: "Inventario", hint: "Productos y stock", href: "/inventory" },

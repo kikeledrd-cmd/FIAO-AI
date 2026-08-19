@@ -35,7 +35,9 @@ export const ownerAuthorizeRequestSchema = z.object({
     "CASH_WITHDRAWAL",
     "CASH_INJECTION",
     "CASH_CLOSE",
-    "APARTADO_CANCEL"
+    "APARTADO_CANCEL",
+    "ORDER_CANCEL",
+    "ORDER_DELIVER"
   ]),
   targetOperationId: z.uuid(),
   pin: z.string().min(1).max(32)
@@ -50,6 +52,8 @@ export const OWNER_AUTHORIZE_PURPOSES = [
   "CASH_WITHDRAWAL",
   "CASH_INJECTION",
   "CASH_CLOSE",
-  "APARTADO_CANCEL"
+  "APARTADO_CANCEL",
+  "ORDER_CANCEL",
+  "ORDER_DELIVER"
 ] as const;
 export type OwnerAuthorizePurpose = (typeof OWNER_AUTHORIZE_PURPOSES)[number];

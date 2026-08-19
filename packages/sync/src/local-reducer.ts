@@ -226,6 +226,24 @@ export function reduceLoyaltyChange(change: SyncChangeRecord): ProjectionRowValu
   };
 }
 
+/** Pedido (ORDER_CREATE/ACCEPT/ADVANCE/CANCEL/DELIVER → upsert del estado). */
+export function reduceOrderChange(change: SyncChangeRecord): ProjectionRowValue {
+  if (change.type !== "ORDER") throw new Error("UNKNOWN_SYNC_CHANGE_TYPE");
+  const payload = asRecord(change.payload);
+  const orderId = payload.orderId;
+  if (typeof orderId !== "string" || orderId.length === 0) {
+    throw new Error("INVALID_SYNC_CHANGE_PAYLOAD");
+  }
+  return {
+    key: `${change.ownerId}:${change.branchId}:ORDER:${orderId}`,
+    ownerId: change.ownerId,
+    branchId: change.branchId,
+    type: change.type,
+    cursor: change.cursor,
+    payload: change.payload
+  };
+}
+
 export function reduceChange(change: SyncChangeRecord): ProjectionRowValue {
   switch (change.type) {
     case "NOOP":
@@ -255,6 +273,8 @@ export function reduceChange(change: SyncChangeRecord): ProjectionRowValue {
       return reduceApartadoChange(change);
     case "LOYALTY":
       return reduceLoyaltyChange(change);
+    case "ORDER":
+      return reduceOrderChange(change);
     default:
       throw new Error("UNKNOWN_SYNC_CHANGE_TYPE");
   }

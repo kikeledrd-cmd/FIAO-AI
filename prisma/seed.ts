@@ -42,6 +42,7 @@ async function seed() {
     await tx.creditMovement.deleteMany({ where: { ownerId: ownerAccount.id } });
     await tx.sale.deleteMany({ where: { ownerId: ownerAccount.id } });
     await tx.apartado.deleteMany({ where: { ownerId: ownerAccount.id } });
+    await tx.order.deleteMany({ where: { ownerId: ownerAccount.id } });
     await tx.cashMovement.deleteMany({ where: { ownerId: ownerAccount.id } });
     await tx.cashSession.deleteMany({ where: { ownerId: ownerAccount.id } });
     await tx.purchaseLine.deleteMany({ where: { ownerId: ownerAccount.id } });

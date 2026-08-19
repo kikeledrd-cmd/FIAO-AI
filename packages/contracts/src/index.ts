@@ -5,6 +5,7 @@ export * from "./common";
 export * from "./credit";
 export * from "./inventory";
 export * from "./loyalty";
+export * from "./orders";
 export * from "./promotions";
 export * from "./purchasing";
 export * from "./sales";

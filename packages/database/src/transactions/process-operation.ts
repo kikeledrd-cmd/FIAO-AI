@@ -18,6 +18,11 @@ import { processCashClose } from "./process-cash-close";
 import { processCashMovement } from "./process-cash-movement";
 import { processCashOpen } from "./process-cash-open";
 import { processCustomerUpsert } from "./process-customer";
+import { processOrderAccept } from "./process-order-accept";
+import { processOrderAdvance } from "./process-order-advance";
+import { processOrderCancel } from "./process-order-cancel";
+import { processOrderCreate } from "./process-order-create";
+import { processOrderDeliver } from "./process-order-deliver";
 import { processSaleOperation } from "./process-sale";
 import { processSaleReversal } from "./process-sale-reversal";
 import { processStockAdjustment } from "./process-stock-adjustment";
@@ -46,6 +51,11 @@ export async function processOperation(
     if (envelope.type === "APARTADO_CREATE") return processApartadoCreate(context, envelope, db);
     if (envelope.type === "APARTADO_COMPLETE") return processApartadoComplete(context, envelope, db);
     if (envelope.type === "APARTADO_CANCEL") return processApartadoCancel(context, envelope, db);
+    if (envelope.type === "ORDER_CREATE") return processOrderCreate(context, envelope, db);
+    if (envelope.type === "ORDER_ACCEPT") return processOrderAccept(context, envelope, db);
+    if (envelope.type === "ORDER_ADVANCE") return processOrderAdvance(context, envelope, db);
+    if (envelope.type === "ORDER_CANCEL") return processOrderCancel(context, envelope, db);
+    if (envelope.type === "ORDER_DELIVER") return processOrderDeliver(context, envelope, db);
   }
   if (!isFoundationOperationType(envelope.type)) throw new Error("UNKNOWN_OPERATION_TYPE");
 

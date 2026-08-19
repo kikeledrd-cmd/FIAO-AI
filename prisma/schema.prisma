@@ -61,6 +61,7 @@ model OwnerAccount {
   loyaltyMovements    LoyaltyMovement[]
   loyaltyRewards      LoyaltyReward[]
   promotions          Promotion[]
+  orders              Order[]
 }
 
 model Branch {
@@ -93,6 +94,7 @@ model Branch {
   apartados           Apartado[]
   apartadoLines       ApartadoLine[]
   loyaltyMovements    LoyaltyMovement[]
+  orders              Order[]
 
   @@index([ownerId, active])
 }
@@ -119,6 +121,7 @@ model User {
   cashSessionsOpened   CashSession[]        @relation("CashSessionOpenedBy")
   cashSessionsClosed   CashSession[]        @relation("CashSessionClosedBy")
   cashMovements        CashMovement[]       @relation("CashMovementActor")
+  ordersActor          Order[]              @relation("OrderActor")
 
   @@index([ownerId, role, active])
 }
@@ -151,6 +154,7 @@ model Device {
   apartados        Apartado[]
   sales            Sale[]
   cashMovements    CashMovement[]
+  orders           Order[]
 
   @@index([ownerId, userId, active])
 }
@@ -238,6 +242,7 @@ model ClientOperation {
   cashMovements    CashMovement[]
   apartados        Apartado[]
   loyaltyMovements LoyaltyMovement[]
+  orders           Order[]
 
   @@unique([ownerId, operationId])
   @@index([ownerId, branchId, createdAt])
@@ -296,6 +301,7 @@ model Product {
   movements     StockMovement[]
   purchases     PurchaseLine[]
   apartadoLines ApartadoLine[]
+  orderLines    OrderLine[]
   rewards       LoyaltyReward[]
   promotions    Promotion[]
 
@@ -454,6 +460,7 @@ model Customer {
   sales              Sale[]            @relation("SaleCustomer")
   apartados          Apartado[]
   loyaltyMovements   LoyaltyMovement[]
+  orders             Order[]           @relation("OrderCustomer")
 
   @@index([ownerId, branchId, active])
 }
@@ -670,4 +677,72 @@ model Promotion {
   product         Product?     @relation(fields: [productId], references: [id], onDelete: Restrict)
 
   @@index([ownerId, active])
+}
+
+/// Pedido estructurado (WhatsApp, manual o repetir). Estados:
+/// NEW -> PREPARING -> READY -> ON_THE_WAY -> DELIVERED, con CANCELLED en
+/// cualquier punto no terminal. Append-only; la venta final se crea en DELIVER.
+model Order {
+  id                String           @id @default(uuid()) @db.Uuid
+  ownerId           String           @db.Uuid
+  branchId          String           @db.Uuid
+  orderId           String           @unique @db.Uuid
+  source            String
+  status            String           @default("NEW")
+  customerId        String?          @db.Uuid
+  actorUserId       String           @db.Uuid
+  deviceId          String           @db.Uuid
+  clientOperationId String?          @db.Uuid
+  lines             Json
+  totalCents        Int
+  deliveryName      String?          @db.VarChar(80)
+  deliveryAddress   String?          @db.VarChar(300)
+  deliveryFeeCents  Int              @default(0)
+  notes             String?          @db.VarChar(300)
+  exceptionReason   String?          @db.VarChar(300)
+  saleId            String?          @db.Uuid
+  occurredAt        DateTime
+  createdAt         DateTime         @default(now())
+  owner             OwnerAccount     @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch            Branch           @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  customer          Customer?        @relation("OrderCustomer", fields: [customerId], references: [id], onDelete: Restrict)
+  actor             User             @relation("OrderActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  device            Device           @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  clientOperation   ClientOperation? @relation(fields: [clientOperationId], references: [id], onDelete: Restrict)
+  orderLines        OrderLine[]
+  timeline          OrderTimelineEvent[]
+
+  @@index([ownerId, branchId, status, createdAt])
+  @@index([customerId])
+}
+
+/// Linea de pedido (append-only).
+model OrderLine {
+  id             String       @id @default(uuid()) @db.Uuid
+  ownerId        String       @db.Uuid
+  branchId       String       @db.Uuid
+  orderId        String       @db.Uuid
+  productId      String       @db.Uuid
+  quantity       String       @db.VarChar(32)
+  priceCents     Int
+  lineTotalCents Int
+  order          Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product        Product      @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([ownerId, branchId, productId])
+}
+
+/// Evento de linea de tiempo de un pedido (append-only).
+model OrderTimelineEvent {
+  id          String       @id @default(uuid()) @db.Uuid
+  ownerId     String       @db.Uuid
+  branchId    String       @db.Uuid
+  orderId     String       @db.Uuid
+  status      String
+  actorUserId String?      @db.Uuid
+  note        String?      @db.VarChar(300)
+  occurredAt  DateTime
+  order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, branchId, orderId, occurredAt])
 }

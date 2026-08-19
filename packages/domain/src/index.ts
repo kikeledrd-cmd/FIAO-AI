@@ -60,3 +60,17 @@ export type {
   PromotionResult,
   PromotionScope
 } from "./promotions/promotion-policy";
+export {
+  assertOrderTransitionValid,
+  finalizesSaleOnTransition,
+  orderCancelRequiresAuthorization,
+  ORDER_STATUS_LABEL,
+  reservesStockOnTransition
+} from "./orders/order-policy";
+export type { OrderSource, OrderStatus } from "./orders/order-policy";
+export { extractOrderLines, normalizeOrderText } from "./orders/order-extraction";
+export type {
+  ExtractedOrderLine,
+  OrderCatalogItem,
+  OrderExtractionResult
+} from "./orders/order-extraction";

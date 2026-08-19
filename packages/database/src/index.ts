@@ -33,3 +33,4 @@ export type { CashStateResult } from "./repositories/cash-repository";
 export { ApartadoRepository } from "./repositories/apartado-repository";
 export { LoyaltyRepository } from "./repositories/loyalty-repository";
 export type { CustomerLoyalty } from "./repositories/loyalty-repository";
+export { OrderRepository } from "./repositories/order-repository";

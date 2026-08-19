@@ -1,6 +1,6 @@
 import type { ClientOperationEnvelope, OperationResult, SyncChangeRecord } from "@fiao/contracts/sync";
 import { ApiError, apiJson } from "@/lib/api/client";
-import { FiaoOfflineDatabase, offlineDb, type LocalApartadoRow } from "./db";
+import { FiaoOfflineDatabase, offlineDb, type LocalApartadoRow, type LocalOrderRow } from "./db";
 import { applySyncChanges, listPendingOperations, markOperationResult } from "./queue";
 import { applySignedStockDeltas, adjustLocalStock } from "./catalog";
 import { applyCreditDeltasLocally, upsertCustomersLocally } from "./customers";
@@ -93,6 +93,7 @@ export function createSyncClient(options?: {
           await applyCashDeltasLocally(response.changes, database);
           await applyApartadoDeltasLocally(response.changes, database);
           await applyLoyaltyDeltasLocally(response.changes, database);
+          await applyOrderDeltasLocally(response.changes, database);
           pulled += response.changes.length;
           cursor = response.nextCursor;
           if (!response.hasMore) break;
@@ -411,6 +412,82 @@ async function applyLoyaltyDeltasLocally(
         expiresAt: payload.expiresAt ?? null,
         occurredAt: payload.occurredAt ?? change.createdAt
       });
+    }
+  });
+}
+
+/** Aplica deltas ORDER: upsert del pedido y ajuste de reservas del catA�logo
+ *  local (NEW �+' PREPARING reserva += qty; CANCELLED/DELIVERED libera += qty). */
+async function applyOrderDeltasLocally(
+  changes: SyncChangeRecord[],
+  database: FiaoOfflineDatabase
+): Promise<void> {
+  const orderChanges = changes.filter((change) => change.type === "ORDER");
+  if (orderChanges.length === 0) return;
+  const reservationDeltas: { productId: string; quantityDelta: string }[] = [];
+  await database.transaction("rw", database.orders, database.catalog, async () => {
+    for (const change of orderChanges) {
+      const payload = change.payload as {
+        orderId?: string;
+        status?: string;
+        source?: string;
+        customerId?: string | null;
+        lines?: { productId: string; quantity: string; priceCents?: number; lineTotalCents?: number }[];
+        totalCents?: number;
+        deliveryName?: string | null;
+        deliveryAddress?: string | null;
+        deliveryFeeCents?: number;
+        notes?: string | null;
+        exceptionReason?: string | null;
+        saleId?: string | null;
+        occurredAt?: string;
+      };
+      if (!payload.orderId || !payload.status) continue;
+      const existing = await database.orders.get(payload.orderId);
+      const lines = (payload.lines ?? existing?.lines ?? []).map((line) => ({
+        productId: line.productId,
+        quantity: line.quantity,
+        priceCents: typeof line.priceCents === "number" ? line.priceCents : 0,
+        lineTotalCents: typeof line.lineTotalCents === "number" ? line.lineTotalCents : 0
+      }));
+      await database.orders.put({
+        orderId: payload.orderId,
+        ownerId: change.ownerId,
+        branchId: change.branchId,
+        source: (payload.source as LocalOrderRow["source"]) ?? existing?.source ?? "MANUAL",
+        status: payload.status as LocalOrderRow["status"],
+        customerId: payload.customerId ?? existing?.customerId ?? null,
+        lines,
+        deliveryName: payload.deliveryName ?? existing?.deliveryName ?? null,
+        deliveryAddress: payload.deliveryAddress ?? existing?.deliveryAddress ?? null,
+        deliveryFeeCents: payload.deliveryFeeCents ?? existing?.deliveryFeeCents ?? 0,
+        totalCents: payload.totalCents ?? existing?.totalCents ?? 0,
+        notes: payload.notes ?? existing?.notes ?? null,
+        exceptionReason: payload.exceptionReason ?? existing?.exceptionReason ?? null,
+        saleId: payload.saleId ?? existing?.saleId ?? null,
+        occurredAt: payload.occurredAt ?? change.createdAt
+      });
+
+      // Ajuste de reservas solo en transiciones que cambian la reserva.
+      const oldStatus = existing?.status;
+      const newStatus = payload.status;
+      const reserves = newStatus === "PREPARING" || newStatus === "READY" || newStatus === "ON_THE_WAY";
+      const releases = newStatus === "CANCELLED" || newStatus === "DELIVERED";
+      if (reserves && oldStatus === "NEW") {
+        for (const line of lines) reservationDeltas.push({ productId: line.productId, quantityDelta: `+${line.quantity}` });
+      } else if (releases && oldStatus && oldStatus !== "NEW" && oldStatus !== "CANCELLED" && oldStatus !== "DELIVERED") {
+        for (const line of lines) reservationDeltas.push({ productId: line.productId, quantityDelta: `-${line.quantity}` });
+      }
+    }
+    if (reservationDeltas.length === 0) return;
+    for (const delta of reservationDeltas) {
+      const row = await database.catalog.get(delta.productId);
+      if (!row || !row.stockControl) continue;
+      const reserved = row.reserved ?? "0";
+      row.reserved = delta.quantityDelta.startsWith("-")
+        ? subtractQuantitySafely(reserved, delta.quantityDelta.slice(1))
+        : addToQuantity(reserved, delta.quantityDelta.slice(1));
+      await database.catalog.put(row);
     }
   });
 }
