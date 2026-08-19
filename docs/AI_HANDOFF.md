@@ -1,6 +1,6 @@
 # FIAO AI — AI Handoff
 
-Fecha de corte: **2026-08-18**
+Fecha de corte: **2026-08-19**
 
 ## 1. Objetivo del proyecto
 
@@ -18,13 +18,14 @@ El roadmap técnico está en:
 
 El plan que se está ejecutando actualmente está en:
 
-`docs/superpowers/plans/2026-08-17-fiao-orders-whatsapp.md`
+`docs/superpowers/plans/2026-08-18-fiao-ai-orchestrator.md`
 
 > Plan 1 (foundation/sync/auth/PWA) completado; Tasks 11 (POS ventas), 12
 > (fiado/clientes), 13 (inventario/reversos), 14 (compras/proveedores), 15
-> (caja), 16 (devoluciones/apartados y lealtad/promociones) y 17 (pedidos por
-> WhatsApp + delivery básico) completadas; la siguiente tarea es Plan 4 (FIAO
-> AI Orchestrator and Voice).
+> (caja), 16 (devoluciones/apartados y lealtad/promociones), 17 (pedidos por
+> WhatsApp + delivery básico) y 18 (FIAO AI Orchestrator and Voice) completadas;
+> la siguiente tarea es Plan 5 (Reportes, Onboarding, Configuración, Demo y
+> Exportaciones).
 
 Si código y memoria conversacional difieren, primero revisar estos documentos y después el historial Git.
 
@@ -349,6 +350,60 @@ Requisitos principales:
 >   corridas → usar `deliveryName` único y selectores scoped al `li.customers-item`;
 >   el deliver solo finaliza la venta por las líneas (el deliveryFee no se
 >   materializa como venta en V1).
+
+### Siguiente tarea (Plan 4)
+
+**Task 18: FIAO AI Orchestrator and Voice.**
+
+> ✅ **COMPLETADA 2026-08-19.** Verificación completa pasó en esta máquina
+> (Node 22 + PostgreSQL 18 en Docker): `lint` (0 errores, 1 warning
+> preexistente postcss), `typecheck`, `test` (208), `test:integration` (107),
+> `build` (aparecen `/ai`, `/api/ai/message`, `/api/ai/confirm`) y `test:e2e`
+> (los 3 casos de `ai-orchestrator.spec.ts` pasan; la suite completa queda
+> 27/29 por la flakiness preexistente de los specs offline `auth-and-offline`
+> y `sales-flow` con `context.setOffline()` + `page.reload()` →
+> `net::ERR_FAILED`, ajenos a esta task).
+> Notas de ejecución:
+>
+> - Dominio `domain/ai/ai-intent.ts`: `parseAiIntent` determinístico
+>   (español/dominicano) que clasifica QUERY vs ACTION y extrae
+>   monto/customerQuery por palabra completa (word boundary, para no confundir
+>   “venta” dentro de “inventario”); `extractAmountCents`,
+>   `detectAnomalousAmount`, labels CONFIRMED/ESTIMATED/RECOMMENDATION. La
+>   ambigüedad de entidades NUNCA se auto-resuelve (devuelve opciones).
+> - Contratos `contracts/ai.ts` + migración `commerce_ai` (`AiAuditLog`
+>   append-only + `AiActionToken` de un solo uso con TTL).
+> - Repos `AiQueryRepository` (agregaciones de solo lectura: ventas, fiado,
+>   saldo de cliente, inventario bajo, caja, pedidos; reutiliza
+>   `computeExpectedCashForSession`) y `AiAuditRepository` (log + tokens).
+> - Tool registry `database/ai/tools.ts`: `runAiQuery`, `buildActionPlan`
+>   (resuelve cliente por nombre con ambigüedad, ids estables para replay),
+>   `executeActionPlan` (delega a `processOperation`). Acciones: abono y
+>   apertura de caja con confirmación; ajuste de stock protegido (PIN); venta/
+>   pedido devuelven “hacerlo desde la UI” en V1.
+> - Orquestador `apps/web/lib/ai/orchestrator.ts` + `provider.ts` (adapter
+>   mockeable; el modelo SOLO produce intents, nunca ejecuta mutaciones).
+>   `handleMessage` (query/clarification/action_preview) y `confirmAction`
+>   (consume el token, inyecta `ownerAuthorizationId` en el payload y ejecuta).
+>   Todo pasa por `AiAuditLog`.
+> - API: `POST /api/ai/message` (texto + overrides) y `POST /api/ai/confirm`
+>   (token + ownerAuthorizationId); el PIN del dueño se pide vía el endpoint
+>   existente `POST /api/owner/authorize` (purpose `STOCK_ADJUSTMENT`).
+> - UI: pantalla `/ai` (chat, entrada por voz con Web Speech API, confirmación
+>   de acciones y campo de PIN para acciones protegidas); card FIAO AI en home.
+> - Exit gates cubiertos: el modelo no ejecuta mutaciones directamente (pasa
+>   por `processOperation` + confirmación), el cajero no obtiene datos
+>   owner-only (ninguna query expone margen/diferencia/contado), nombres
+>   ambiguos nunca se auto-resuelven, replay/idempotencia por token de un solo
+>   uso, suite de intents core en `ai-intent.test.ts` +
+>   `orchestrator.integration.test.ts`.
+> - gotchas: `AiActionToken.tokenId` se genera en el código (no tiene default
+>   en Prisma); el `payload` del token se castea a `Prisma.InputJsonValue`;
+>   los payloads usan el `customerId` público, pero `CreditMovement.customerId`
+>   es FK al `id` interno (resolver con el repo antes de consultar saldo); los
+>   overrides null del handler no deben pisar el monto extraído del intent
+>   (fusionar ignorando null); Docker Desktop se apaga entre sesiones →
+>   reiniciarlo y re-seedear antes de `test:e2e`.
 
 ## 4. Reglas de arquitectura
 
