@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
+import type { OnboardingState } from "@fiao/contracts/settings";
 import { useAppShell } from "@/components/app-shell";
 import { useSync } from "@/features/sync/sync-provider";
 
@@ -19,7 +21,9 @@ const PLAN2_MODULES: { key: string; label: string; hint: string; href?: string }
   { key: "suppliers", label: "Proveedores", hint: "Compras y costos", href: "/suppliers" },
   { key: "inventory", label: "Inventario", hint: "Productos y stock", href: "/inventory" },
   { key: "cash", label: "Caja", hint: "Apertura y arqueo", href: "/cash" },
-  { key: "ai", label: "FIAO AI", hint: "Pregúntale a tu negocio", href: "/ai" }
+  { key: "ai", label: "FIAO AI", hint: "Pregúntale a tu negocio", href: "/ai" },
+  { key: "reportes", label: "Reportes", hint: "Resumen y exportación", href: "/reportes" },
+  { key: "configuracion", label: "Configuración", hint: "Ajustes y dispositivos", href: "/configuracion" }
 ] as const;
 
 export function HomeScreen() {
@@ -29,6 +33,7 @@ export function HomeScreen() {
 
   return (
     <div className="home-screen">
+      <OnboardingBanner branchId={activeBranchId} isOwner={user.role === "OWNER"} />
       <section className="home-summary">
         <p className="home-greeting">
           Hola, <strong>{user.name}</strong> ({ROLE_LABEL[user.role]})
@@ -76,5 +81,41 @@ export function HomeScreen() {
         </ul>
       </section>
     </div>
+  );
+}
+
+const MILESTONE_LABEL: Record<string, string> = {
+  BRANCH_CREATED: "Sucursal creada",
+  CATALOG_LOADED: "Catálogo cargado",
+  CUSTOMER_CREATED: "Primer cliente",
+  CASH_OPENED: "Caja abierta",
+  FIRST_SALE: "Primera venta"
+};
+
+function OnboardingBanner({ branchId, isOwner }: { branchId: string; isOwner: boolean }) {
+  const [state, setState] = useState<OnboardingState | null>(null);
+
+  useEffect(() => {
+    if (!isOwner) return;
+    let cancelled = false;
+    fetch(`/api/onboarding?branchId=${branchId}`)
+      .then((response) => response.json())
+      .then((json) => {
+        if (!cancelled && json.state) setState(json.state);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [branchId, isOwner]);
+
+  if (!isOwner || !state || state.next === null) return null;
+  return (
+    <section className="onboarding-banner" aria-label="Progreso de configuración">
+      <strong>
+        Configuración: {state.completedCount}/{state.total}
+      </strong>
+      <span>Siguiente: {MILESTONE_LABEL[state.next] ?? state.next}</span>
+    </section>
   );
 }

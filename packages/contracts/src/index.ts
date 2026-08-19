@@ -9,5 +9,7 @@ export * from "./loyalty";
 export * from "./orders";
 export * from "./promotions";
 export * from "./purchasing";
+export * from "./reports";
 export * from "./sales";
+export * from "./settings";
 export * from "./sync";

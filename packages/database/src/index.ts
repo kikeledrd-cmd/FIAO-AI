@@ -53,3 +53,5 @@ export type {
   AiLabel,
   AiQueryResult
 } from "./ai/tools";
+export { ReportRepository } from "./repositories/report-repository";
+export { DeviceRepository, OnboardingRepository, SettingsRepository } from "./repositories/settings-repository";

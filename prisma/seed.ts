@@ -52,6 +52,8 @@ async function seed() {
     await tx.auditEvent.deleteMany({ where: { ownerId: ownerAccount.id } });
     await tx.aiAuditLog.deleteMany({ where: { ownerId: ownerAccount.id } });
     await tx.aiActionToken.deleteMany({ where: { ownerId: ownerAccount.id } });
+    await tx.businessSettings.deleteMany({ where: { ownerId: ownerAccount.id } });
+    await tx.onboardingState.deleteMany({ where: { ownerId: ownerAccount.id } });
     await tx.clientOperation.deleteMany({ where: { ownerId: ownerAccount.id } });
     await tx.customer.deleteMany({ where: { ownerId: ownerAccount.id } });
     await tx.productStock.deleteMany({ where: { ownerId: ownerAccount.id } });
@@ -91,6 +93,8 @@ async function seed() {
     await seedCustomers(tx, ownerAccount.id, BRANCH_LOS_MINA_ID);
     await seedCustomers(tx, ownerAccount.id, BRANCH_INVIVIENDA_ID);
     await seedLoyaltyAndPromotions(tx, ownerAccount.id, BRANCH_LOS_MINA_ID);
+    await seedSettings(tx, ownerAccount.id, BRANCH_LOS_MINA_ID);
+    await seedSettings(tx, ownerAccount.id, BRANCH_INVIVIENDA_ID);
   });
 
   console.log("Seed complete: owner + cashier + 2 branches + catalog + customers + loyalty/promos.");
@@ -217,6 +221,23 @@ async function seedLoyaltyAndPromotions(
       }
     });
   }
+}
+
+async function seedSettings(
+  tx: Parameters<Parameters<typeof databaseClient.$transaction>[0]>[0],
+  ownerId: string,
+  branchId: string
+) {
+  await tx.businessSettings.upsert({
+    where: { branchId },
+    update: { ownerId, defaultPromiseDays: 7, lowStockThreshold: 3, cashierDiscountLimitCents: 1000, whatsappRemindersEnabled: false },
+    create: { ownerId, branchId, defaultPromiseDays: 7, lowStockThreshold: 3, cashierDiscountLimitCents: 1000, whatsappRemindersEnabled: false }
+  });
+  await tx.onboardingState.upsert({
+    where: { branchId },
+    update: { ownerId, milestones: ["BRANCH_CREATED", "CATALOG_LOADED", "CUSTOMER_CREATED"] },
+    create: { ownerId, branchId, milestones: ["BRANCH_CREATED", "CATALOG_LOADED", "CUSTOMER_CREATED"] }
+  });
 }
 
 async function seedCatalog(tx: Parameters<Parameters<typeof databaseClient.$transaction>[0]>[0], ownerId: string, branchId: string) {

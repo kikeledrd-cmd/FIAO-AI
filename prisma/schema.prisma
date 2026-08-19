@@ -64,6 +64,8 @@ model OwnerAccount {
   orders              Order[]
   aiAuditLogs         AiAuditLog[]
   aiActionTokens      AiActionToken[]
+  businessSettings    BusinessSettings[]
+  onboardingStates    OnboardingState[]
 }
 
 model Branch {
@@ -99,6 +101,8 @@ model Branch {
   orders              Order[]
   aiAuditLogs         AiAuditLog[]
   aiActionTokens      AiActionToken[]
+  businessSettings    BusinessSettings[]
+  onboardingStates    OnboardingState[]
 
   @@index([ownerId, active])
 }
@@ -776,6 +780,37 @@ model AiAuditLog {
 
   @@index([ownerId, branchId, createdAt])
   @@index([actorUserId])
+}
+
+/// Config operativa por sucursal (reglas de operación V1, upsert singleton).
+model BusinessSettings {
+  id                        String       @id @default(uuid()) @db.Uuid
+  ownerId                   String       @db.Uuid
+  branchId                  String       @unique @db.Uuid
+  defaultPromiseDays        Int          @default(7)
+  lowStockThreshold         Int          @default(3)
+  cashierDiscountLimitCents Int          @default(1000)
+  whatsappRemindersEnabled  Boolean      @default(false)
+  createdAt                 DateTime     @default(now())
+  updatedAt                 DateTime     @updatedAt
+  owner                     OwnerAccount @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch                    Branch       @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  @@index([ownerId])
+}
+
+/// Estado de onboarding por sucursal (milestones de activación).
+model OnboardingState {
+  id         String       @id @default(uuid()) @db.Uuid
+  ownerId    String       @db.Uuid
+  branchId   String       @unique @db.Uuid
+  milestones Json         @default("[]")
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  owner      OwnerAccount @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch     Branch       @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  @@index([ownerId])
 }
 
 /// Token de confirmación de una acción de IA (un solo uso). Se emite al

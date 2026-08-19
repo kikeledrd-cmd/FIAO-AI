@@ -96,3 +96,12 @@ export type {
   AiResponseLabel,
   AiToolName
 } from "./ai/ai-intent";
+export {
+  estimatedProfitCents,
+  percentChange,
+  previousPeriodStart,
+  profitLabel,
+  startOfDay,
+  stockLabel
+} from "./reports/report-policy";
+export type { ReportLabel } from "./reports/report-policy";
