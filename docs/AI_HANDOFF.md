@@ -18,14 +18,14 @@ El roadmap técnico está en:
 
 El plan que se está ejecutando actualmente está en:
 
-`docs/superpowers/plans/2026-08-18-fiao-ai-orchestrator.md`
+`docs/superpowers/plans/2026-08-19-fiao-reports-settings.md`
 
 > Plan 1 (foundation/sync/auth/PWA) completado; Tasks 11 (POS ventas), 12
 > (fiado/clientes), 13 (inventario/reversos), 14 (compras/proveedores), 15
 > (caja), 16 (devoluciones/apartados y lealtad/promociones), 17 (pedidos por
-> WhatsApp + delivery básico) y 18 (FIAO AI Orchestrator and Voice) completadas;
-> la siguiente tarea es Plan 5 (Reportes, Onboarding, Configuración, Demo y
-> Exportaciones).
+> WhatsApp + delivery básico), 18 (FIAO AI Orchestrator and Voice) y 19
+> (Reportes, Onboarding, Configuración, Demo y Exportaciones) completadas; la
+> siguiente tarea es Plan 6 (Seguridad, Deployment y Piloto).
 
 Si código y memoria conversacional difieren, primero revisar estos documentos y después el historial Git.
 
@@ -404,6 +404,52 @@ Requisitos principales:
 >   overrides null del handler no deben pisar el monto extraído del intent
 >   (fusionar ignorando null); Docker Desktop se apaga entre sesiones →
 >   reiniciarlo y re-seedear antes de `test:e2e`.
+
+### Siguiente tarea (Plan 5)
+
+**Task 19: Reportes, Onboarding, Configuración, Demo y Exportaciones.**
+
+> ✅ **COMPLETADA 2026-08-19.** Verificación completa pasó en esta máquina
+> (Node 22 + PostgreSQL 18 en Docker): `lint` (0 errores, 1 warning
+> preexistente postcss), `typecheck`, `test` (220), `test:integration` (122),
+> `build` (aparecen `/reportes`, `/configuracion`, `/api/reports`,
+> `/api/reports/export`, `/api/settings`, `/api/onboarding`, `/api/devices`,
+> `/api/devices/revoke`) y `test:e2e` (los 4 casos de `reports-settings.spec.ts`
+> pasan; la suite completa queda 32/33 por la flakiness preexistente del spec
+> offline `auth-and-offline` con `context.setOffline()` + `page.reload()` →
+> `net::ERR_INTERNET_DISCONNECTED`, ajeno a esta task).
+> Notas de ejecución:
+>
+> - Dominio `domain/reports/report-policy.ts`: `startOfDay`,
+>   `previousPeriodStart`, `percentChange`, `estimatedProfitCents`,
+>   `profitLabel`, `stockLabel` (helpers puros); `report-policy.test.ts`.
+> - Contratos `contracts/reports.ts` (dashboards/reportes por tipo + CSV) y
+>   `contracts/settings.ts` (business settings, onboarding, dispositivos).
+> - Migración `commerce_settings_reports`: `BusinessSettings` (upsert singleton
+>   por sucursal) y `OnboardingState` (milestones de activación).
+> - Repos `report-repository.ts` (dashboard, ventas, ganancia, fiado,
+>   inventario, caja, clientes, pedidos y exports CSV de ventas/clientes/
+>   productos; todo reconciliado desde ledgers append-only, nunca proyecciones
+>   sueltas) y `settings-repository.ts` (Settings/Onboarding/Device; revocar
+>   dispositivo invalida sus sesiones).
+> - API: `GET /api/reports?type=&branchId=` (DASHBOARD y PROFIT owner-only),
+>   `GET /api/reports/export?dataset=&branchId=` (PRODUCTS owner-only),
+>   `GET/PUT /api/settings` (PUT owner-only), `GET /api/onboarding`,
+>   `GET /api/devices` + `POST /api/devices/revoke` (owner-only).
+> - UI: pantalla `/reportes` (tabs por reporte, export CSV con descarga) y
+>   `/configuracion` (ajustes editables por el dueño + gestión de
+>   dispositivos); banner de onboarding en home (progreso de milestones);
+>   cards Reportes y Configuración en home.
+> - Tests: `report-repository.integration.test.ts` (9),
+>   `settings-repository.integration.test.ts` (6), `csv.test.ts` (4) y E2E
+>   `reports-settings.spec.ts` (4, incluido cajero sin pestañas protegidas).
+> - gotchas: después de crear una migración hay que `prisma generate` antes de
+>   typecheck (el cliente regenerado no conocía los modelos nuevos); `CsvRow`
+>   solo acepta `string | number` → exportar booleanos como 0/1; `Object.keys`
+>   sobre `CsvRow | undefined` exige guard de `noUncheckedIndexedAccess`; con
+>   `exactOptionalPropertyTypes` el `upsert` de settings debe construir el
+>   objeto de update/create con spreads condicionales (los `undefined` de un
+>   `Partial` no se aceptan en `create`).
 
 ## 4. Reglas de arquitectura
 
