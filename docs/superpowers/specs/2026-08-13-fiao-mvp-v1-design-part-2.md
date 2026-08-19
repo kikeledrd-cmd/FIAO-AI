@@ -180,6 +180,53 @@ Historical closes show differences and patterns. FIAO AI may surface recurring d
 
 ### 11.1 Order states
 
-- New
-- Preparing
-- Ready
+- **New** — pedido entrante (WhatsApp o manual), aún no aceptado; puede auto-aceptarse o quedar en la bandeja de excepciones.
+- **Preparing** — aceptado, stock reservado, en preparación en el colmado.
+- **Ready** — listo para entrega o retiro.
+- **On the way** — asignado a un delivery y en camino.
+- **Delivered** — entregado; finaliza venta/pago/lealtad exactamente una vez (idempotente).
+- **Cancelled** — cancelado; libera la reserva si aún no se preparó.
+
+### 11.2 Origen del pedido
+
+- **WhatsApp**: un mensaje entrante se normaliza a un pedido estructurado (líneas, cantidades, cliente, entrega).
+- **Manual**: el cajero/dueño crea el pedido desde la pantalla `/pedidos` (mismo modelo de dominio).
+- **Repetir último pedido**: acción manual que clona las líneas del último pedido entregado del cliente.
+
+### 11.3 Reservas de inventario
+
+- Aceptar un pedido reserva stock (`ProductStock.reserved += qty`; disponible = onHand − reserved).
+- Cancelar antes de `Preparing` libera la reserva.
+- `Delivered` consume la reserva (`reserved −= qty` y `onHand −= qty`) al crear la venta real.
+
+### 11.4 Webhook de Meta (verificación y normalización)
+
+- `GET /api/whatsapp/webhook` responde al reto de verificación de Meta (`hub.mode`/`hub.verify_token`/`hub.challenge`).
+- `POST /api/whatsapp/webhook` valida la firma (`X-Hub-Signature-256`) y normaliza mensajes entrantes a eventos de pedido.
+- Los mensajes salientes usan una abstracción de plantilla/mensaje (`sendTemplate`/`sendText`) en `packages/whatsapp`; el envío real se mockea en V1.
+
+### 11.5 Extracción de ítems en lenguaje natural
+
+- Adaptador **puro** que convierte texto libre (“2 arroces, una leche y 5 libras de plátano”) en líneas estructuradas.
+- Ambigüedad explícita: si un término no resuelve a un producto único, la orden no se auto-acepta y queda en la bandeja de excepciones con las alternativas.
+- Sustituciones de stock agotado: propuestas que requieren aprobación del cliente (nunca se sustituyen en silencio).
+
+### 11.6 Validación de pago
+
+- El pedido puede pagarse en efectivo, transferencia, tarjeta o fiado (validando cliente y límite, igual que el POS).
+- Los pagos mixtos se validan con las mismas reglas de dominio de venta.
+
+### 11.7 Auto-aceptación y bandeja de excepciones
+
+- Reglas determinísticas de auto-aceptación (p. ej. cliente conocido, ítems sin ambigüedad, stock suficiente, pago válido).
+- Los pedidos que no cumplen entran a la **bandeja de excepciones** para revisión manual.
+
+### 11.8 Entrega
+
+- La entrega se asigna por nombre/etiqueta libre (“Miguel”, “Delivery 1”); el repartidor no es un usuario formal en V1.
+- Línea de tiempo del pedido (`OrderTimelineEvent`) con cada cambio de estado y notificaciones de estado al cliente.
+
+### 11.9 Reglas de cancelación
+
+- Antes de `Preparing`: cancelar libera la reserva.
+- Después de `Preparing`: cancelar exige motivo y, si el actor es cajero, autorización de OWNER.

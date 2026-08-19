@@ -1,6 +1,6 @@
 # FIAO AI — AI Handoff
 
-Fecha de corte: **2026-08-17**
+Fecha de corte: **2026-08-18**
 
 ## 1. Objetivo del proyecto
 
@@ -18,12 +18,13 @@ El roadmap técnico está en:
 
 El plan que se está ejecutando actualmente está en:
 
-`docs/superpowers/plans/2026-08-13-fiao-apartado-loyalty.md`
+`docs/superpowers/plans/2026-08-17-fiao-orders-whatsapp.md`
 
 > Plan 1 (foundation/sync/auth/PWA) completado; Tasks 11 (POS ventas), 12
 > (fiado/clientes), 13 (inventario/reversos), 14 (compras/proveedores), 15
-> (caja) y 16 (devoluciones/apartados y lealtad/promociones) completadas;
-> la siguiente tarea es Plan 3 (pedidos por WhatsApp + delivery básico).
+> (caja), 16 (devoluciones/apartados y lealtad/promociones) y 17 (pedidos por
+> WhatsApp + delivery básico) completadas; la siguiente tarea es Plan 4 (FIAO
+> AI Orchestrator and Voice).
 
 Si código y memoria conversacional difieren, primero revisar estos documentos y después el historial Git.
 
@@ -305,6 +306,49 @@ Requisitos principales:
 >   OWNER se ampliaron (`PURCHASE`/`CASH_*`/`APARTADO_CANCEL`) en el schema del
 >   endpoint `/api/owner/authorize`; `applyPromotions` es la única fuente de
 >   descuento (el servidor recomputa y rechaza desajustes).
+
+### Siguiente tarea (Plan 3)
+
+**Task 17: Pedidos por WhatsApp + delivery básico.**
+
+> ✅ **COMPLETADA 2026-08-18.** Verificación completa pasó en esta máquina
+> (Node 22 + PostgreSQL 18 en Docker): `lint` (0 errores, 1 warning
+> preexistente postcss), `typecheck`, `test` (192), `test:integration` (100),
+> `build` y `test:e2e` (los 4 casos de `orders-whatsapp.spec.ts` pasan; la
+> suite completa queda 23–24/26 por flakiness preexistente de los specs
+> offline `auth-and-offline` y `sales-flow` que usan `context.setOffline()` +
+> `page.reload()` → `net::ERR_FAILED`, ajenos a esta task).
+> Notas de ejecución:
+>
+> - Dominio: `domain/orders/order-policy.ts` (estados
+>   NEW→PREPARING→READY→ON_THE_WAY→DELIVERED + CANCELLED, `assertOrderTransitionValid`,
+>   cancelación libre solo en NEW) y `domain/orders/order-extraction.ts`
+>   (`extractOrderLines` pura y determinística por raíz de palabra, ambigüedad
+>   explícita nunca resuelta en silencio).
+> - Contratos `contracts/orders.ts` + migración `commerce_orders`
+>   (`Order`/`OrderLine`/`OrderTimelineEvent`).
+> - Procesadores `process-order-create` (NEW, sin reserva),
+>   `process-order-accept` (reserva `reserved += qty`), `process-order-advance`,
+>   `process-order-cancel` (libera reserva si ya aceptado; autorización OWNER
+>   purpose `ORDER_CANCEL` a partir de PREPARING) y `process-order-deliver`
+>   (crea la venta final, decrementa `onHand` y libera reserva, fiado y
+>   lealtad, idempotente por operationId).
+> - WhatsApp: `apps/web/lib/whatsapp/verify.ts` (firma `X-Hub-Signature-256`
+>   HMAC-SHA256 + normalización del evento de Meta) y `ingest.ts` (resuelve el
+>   actor OWNER + branch con productos, extrae líneas y auto-acepta si no hay
+>   ambigüedad ni stock insuficiente); `GET/POST /api/whatsapp/webhook`.
+> - API/UI: `GET /api/orders`; pantalla `/pedidos` (crear manual, bandeja de
+>   excepciones, avanzar estados, entregar, cancelar); card Pedidos en home;
+>   Dexie v7 (`orders`) + `applyOrderDeltasLocally` (upsert de estado y ajuste
+>   de reserva local).
+> - E2E `orders-whatsapp.spec.ts`: webhook auto-acepta, ambigüedad → excepción,
+>   flujo manual completo hasta entrega, cancelar un pedido aceptado libera la
+>   reserva.
+> - gotchas: el webhook debe elegir el owner con productos activos (en dev
+>   conviven el owner del seed y el del testkit); los pedidos persisten entre
+>   corridas → usar `deliveryName` único y selectores scoped al `li.customers-item`;
+>   el deliver solo finaliza la venta por las líneas (el deliveryFee no se
+>   materializa como venta en V1).
 
 ## 4. Reglas de arquitectura
 

@@ -27,11 +27,12 @@ El producto funcional **FIAO MVP V1** está definido y la implementación técni
 - **Compras y proveedores (Task 14)**: `/suppliers` (alta/edición con sync offline); modal **Registrar compra** en `/inventory` (proveedor opcional, líneas con cantidad y costo unitario, PIN del dueño si cajero); **costo promedio móvil determinístico** (`Product.costCents`) con aritmética entera; `Purchase`/`PurchaseLine`/`Supplier` append-only; `SUPPLIER_UPSERT`/`PURCHASE` idempotentes; Dexie v4 con `suppliers` y deltas PURCHASE (stock + costo) aplicados por el sync client.
 - **Caja (Task 15)**: `/cash` con apertura (float inicial), gastos con límite de cajero (RD$ 1.000) y autorización de OWNER por PIN para retiros/inyecciones/gastos mayores/cierres con diferencia; **arqueo** con efectivo esperado computado (spec §10.5) y movimiento `DIFFERENCE` auditado; una sola sesión abierta por sucursal garantizada por constraint (`openUniqueKey`); `CASH_OPEN`/`CASH_EXPENSE`/`CASH_WITHDRAWAL`/`CASH_INJECTION`/`CASH_CLOSE` idempotentes y append-only; Dexie v5 con `cashSessions`/`cashMovements` y `GET /api/cash`.
 - **Apartados, lealtad y promociones (Task 16)**: `/apartados` con reserva de inventario (`ProductStock.reserved`), anticipo a caja y completado/cancelación (crédito a favor + PIN del dueño); **lealtad** con ledger de puntos append-only (`EARN`/`REDEEM`/`REVERSAL`, saldo computado con vencimiento) y catálogo de recompensas (`FREE_PRODUCT`/`FIXED_DISCOUNT`); **promociones determinísticas** aplicadas en vivo en el POS (`PERCENT_OFF`/`FIXED_OFF`/`BUNDLE_BUY_X_GET_Y`, recompute server-side con `PROMOTION_MISMATCH`); `GET /api/apartados|loyalty|rewards|promotions`; Dexie v6 con tablas de apartados/lealtad/promos.
+- **Pedidos por WhatsApp + delivery (Task 17)**: máquina de estados `NEW→PREPARING→READY→ON_THE_WAY→DELIVERED/CANCELLED` con reserva/liberación de inventario; webhook de Meta (`GET/POST /api/whatsapp/webhook`) con firma `X-Hub-Signature-256` y extracción de ítems en lenguaje natural (pura y determinística, ambigüedad explícita); pantalla `/pedidos` (crear manual, bandeja de excepciones, avanzar estados, entregar y cancelar); entrega que finaliza la venta/pago/fiado/lealtad exactamente una vez (idempotente); `GET /api/orders`; Dexie v7 con `orders` y `applyOrderDeltasLocally`.
 - Documentación completa del Blueprint, roadmap, handoff y runbook local.
 
 ### Próxima tarea
 
-**Plan 3 — Pedidos por WhatsApp + delivery básico:** estado de pedido, reservas, webhook de Meta y entrega. Ver `docs/AI_HANDOFF.md`.
+**Plan 4 — FIAO AI Orchestrator and Voice:** FIAO AI como interfaz operativa con voz, consultas/acciones de solo lectura, resúmenes e insights. Ver `docs/AI_HANDOFF.md`.
 
 ## Documentación obligatoria
 
