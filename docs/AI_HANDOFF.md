@@ -18,14 +18,15 @@ El roadmap técnico está en:
 
 El plan que se está ejecutando actualmente está en:
 
-`docs/superpowers/plans/2026-08-19-fiao-reports-settings.md`
+`docs/superpowers/plans/2026-08-19-fiao-security-deployment.md`
 
 > Plan 1 (foundation/sync/auth/PWA) completado; Tasks 11 (POS ventas), 12
 > (fiado/clientes), 13 (inventario/reversos), 14 (compras/proveedores), 15
 > (caja), 16 (devoluciones/apartados y lealtad/promociones), 17 (pedidos por
-> WhatsApp + delivery básico), 18 (FIAO AI Orchestrator and Voice) y 19
-> (Reportes, Onboarding, Configuración, Demo y Exportaciones) completadas; la
-> siguiente tarea es Plan 6 (Seguridad, Deployment y Piloto).
+> WhatsApp + delivery básico), 18 (FIAO AI Orchestrator and Voice), 19
+> (Reportes, Onboarding, Configuración, Demo y Exportaciones) y 20 (Security
+> Hardening, Deployment y Pilot Readiness) completadas. El MVP V1 está
+> completo según el roadmap; queda pendiente la validación de piloto real.
 
 Si código y memoria conversacional difieren, primero revisar estos documentos y después el historial Git.
 
@@ -450,6 +451,50 @@ Requisitos principales:
 >   `exactOptionalPropertyTypes` el `upsert` de settings debe construir el
 >   objeto de update/create con spreads condicionales (los `undefined` de un
 >   `Partial` no se aceptan en `create`).
+
+### Siguiente tarea (Plan 6)
+
+**Task 20: Security Hardening, Deployment y Pilot Readiness.**
+
+> ✅ **COMPLETADA 2026-08-20.** Verificación completa pasó en esta máquina
+> (Node 22 + PostgreSQL 18 en Docker): `lint` (0 errores, 1 warning
+> preexistente postcss), `typecheck`, `test` (230), `test:integration` (131),
+> `build` (middleware compilado, rutas `/api/analytics/*`) y `test:e2e`
+> (32/33; solo el flaky preexistente offline `auth-and-offline` con
+> `net::ERR_INTERNET_DISCONNECTED`, ajeno a esta task).
+> Notas de ejecución:
+>
+> - **Security headers** en `next.config.ts` (`headers()`): nosniff,
+>   X-Frame-Options DENY, Referrer-Policy, Permissions-Policy y, en
+>   producción, HSTS + CSP (`frame-ancestors 'none'`).
+> - **CSRF** en `apps/web/middleware.ts` (`matcher /api/:path*`): rechaza
+>   mutaciones cross-site por `Origin`/`Sec-Fetch-Site`; el webhook de
+>   WhatsApp queda exento (validado por HMAC-SHA256, más fuerte).
+> - **Lockout persistente** de login: migración `commerce_security_lockout`
+>   (`User.failedLoginAttempts`/`lockedUntil`), backoff exponencial en DB
+>   (5 intentos libres → 30s → ×2 hasta 15 min) además del throttle en
+>   memoria; `ACCOUNT_LOCKED` con `Retry-After`.
+> - **Seed/demo separation**: `FIAO_SEED_MODE=demo|prod`. `demo` (default)
+>   es el tenant ficticio idempotente (bloqueado en producción); `prod` crea
+>   un tenant mínimo (dueño + sucursales + settings, sin catálogo/clientes
+>   ficticios) y exige `FIAO_ALLOW_PROD_SEED=true`.
+> - **Observability + PII redaction**: `apps/web/lib/observability/logger.ts`
+>   (JSON-lines, `redactPii` para emails/teléfonos) usado en login.
+> - **Pilot analytics**: modelo `PilotEvent` (append-only, migración
+>   `commerce_pilot_events`) + `AnalyticsRepository.record/summary`;
+>   `GET /api/analytics/summary` (owner-only) y `POST /api/analytics/event`
+>   (whitelist de eventos); emisión server-side de `USER_LOGIN` en login.
+>   `summary` computa métricas §25 desde los ledgers + PilotEvent.
+> - **Runbooks + deployment**: `docs/runbooks/{sync-reconciliation,
+>   database-backup-restore, whatsapp-degraded-mode, ai-degraded-mode,
+>   pilot-onboarding-checklist, deployment}.md`.
+> - **Tests**: `middleware.test.ts` (CSRF), `logger.test.ts` (PII), lockout en
+>   `login/route.test.ts`, `analytics-repository.integration.test.ts` y
+>   `auth-isolation.integration.test.ts` (fuzz cross-tenant).
+> - gotchas: tras `migrate dev` hay que `prisma generate` antes de typecheck;
+>   `PilotEvent.metadata` con `exactOptionalPropertyTypes` exige spread
+>   condicional; `z.record` requiere key+value (`z.record(z.string(), ...)`);
+>   el middleware de Next corre en Edge (solo headers, sin body).
 
 ## 4. Reglas de arquitectura
 
