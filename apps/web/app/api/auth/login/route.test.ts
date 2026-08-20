@@ -19,7 +19,9 @@ function validUser(): LoginUserRecord {
       name: "José Dueño",
       phoneE164: "+18095550123",
       pinHash: "argon-hash",
-      role: "OWNER"
+      role: "OWNER",
+      failedLoginAttempts: 0,
+      lockedUntil: null
     },
     owner: { id: "22222222-2222-4222-8222-222222222222", name: "Colmado El Primo" },
     branches: [{ id: "33333333-3333-4333-8333-333333333333", name: "Los Mina", timezone: "America/Santo_Domingo" }]
@@ -37,7 +39,9 @@ function repository(user: LoginUserRecord | null) {
     createSession: vi.fn(async (input: CreateSessionInput) => ({
       id: "55555555-5555-4555-8555-555555555555",
       expiresAt: input.expiresAt
-    }))
+    })),
+    updateLoginFailures: vi.fn(async () => undefined),
+    clearLoginFailures: vi.fn(async () => undefined)
   };
 }
 
@@ -76,6 +80,40 @@ describe("POST /api/auth/login", () => {
     const blocked = await POST(request({ phone: "+18095550123", pin: "9999", deviceLabel: "Caja" }));
     expect(blocked.status).toBe(429);
     expect(blocked.headers.get("retry-after")).toBe("1");
+  });
+
+  it("rejects a locked account with a retry-after", async () => {
+    const user = validUser();
+    user.user.lockedUntil = new Date(60_000);
+    const repo = repository(user);
+    const POST = createLoginHandler({
+      repository: repo,
+      verifyPinHash: async () => true,
+      throttle: freshThrottle(),
+      now: () => 0
+    });
+
+    const response = await POST(request({ phone: "+18095550123", pin: "1234", deviceLabel: "Caja" }));
+
+    expect(response.status).toBe(429);
+    expect(await response.json()).toEqual({ error: "ACCOUNT_LOCKED" });
+    expect(response.headers.get("retry-after")).toBe("60");
+    expect(repo.createSession).not.toHaveBeenCalled();
+  });
+
+  it("clears persisted lockout on successful login", async () => {
+    const repo = repository(validUser());
+    const POST = createLoginHandler({
+      repository: repo,
+      verifyPinHash: async () => true,
+      throttle: freshThrottle(),
+      randomToken: () => "token",
+      now: () => Date.UTC(2026, 7, 13, 20, 0, 0)
+    });
+
+    await POST(request({ phone: "+18095550123", pin: "1234", deviceLabel: "Caja" }));
+
+    expect(repo.clearLoginFailures).toHaveBeenCalledWith("+18095550123");
   });
 
   it("creates a hashed-token session for a valid active user", async () => {

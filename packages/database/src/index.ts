@@ -55,3 +55,5 @@ export type {
 } from "./ai/tools";
 export { ReportRepository } from "./repositories/report-repository";
 export { DeviceRepository, OnboardingRepository, SettingsRepository } from "./repositories/settings-repository";
+export { AnalyticsRepository } from "./repositories/analytics-repository";
+export type { PilotSummary } from "./repositories/analytics-repository";

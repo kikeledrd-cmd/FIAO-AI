@@ -66,6 +66,7 @@ model OwnerAccount {
   aiActionTokens      AiActionToken[]
   businessSettings    BusinessSettings[]
   onboardingStates    OnboardingState[]
+  pilotEvents         PilotEvent[]
 }
 
 model Branch {
@@ -103,6 +104,7 @@ model Branch {
   aiActionTokens      AiActionToken[]
   businessSettings    BusinessSettings[]
   onboardingStates    OnboardingState[]
+  pilotEvents         PilotEvent[]
 
   @@index([ownerId, active])
 }
@@ -115,6 +117,8 @@ model User {
   pinHash              String               @db.VarChar(255)
   role                 Role
   active               Boolean              @default(true)
+  failedLoginAttempts  Int                  @default(0)
+  lockedUntil          DateTime?
   createdAt            DateTime             @default(now())
   updatedAt            DateTime             @updatedAt
   owner                OwnerAccount         @relation(fields: [ownerId], references: [id], onDelete: Restrict)
@@ -833,4 +837,20 @@ model AiActionToken {
 
   @@index([ownerId, branchId, createdAt])
   @@index([actorUserId, consumedAt])
+}
+
+/// Evento de instrumentación del piloto (append-only). Alimenta las métricas §25.
+model PilotEvent {
+  id         String       @id @default(uuid()) @db.Uuid
+  ownerId    String       @db.Uuid
+  branchId   String?      @db.Uuid
+  eventName  String       @db.VarChar(80)
+  metadata   Json?
+  occurredAt DateTime
+  createdAt  DateTime     @default(now())
+  owner      OwnerAccount @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  branch     Branch?      @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  @@index([ownerId, eventName, occurredAt])
+  @@index([ownerId, occurredAt])
 }

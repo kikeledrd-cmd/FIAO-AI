@@ -12,14 +12,20 @@ const SEED_OWNER_PHONE = process.env.FIAO_SEED_OWNER_PHONE ?? "+18095550123";
 const SEED_OWNER_PIN = process.env.FIAO_SEED_OWNER_PIN ?? "1234";
 const SEED_CASHIER_PHONE = process.env.FIAO_SEED_CASHIER_PHONE ?? "+18095550999";
 const SEED_CASHIER_PIN = process.env.FIAO_SEED_CASHIER_PIN ?? "5678";
+const SEED_OWNER_NAME = process.env.FIAO_SEED_OWNER_NAME ?? "Colmado Demo";
+const SEED_MODE = (process.env.FIAO_SEED_MODE ?? "demo") === "prod" ? "prod" : "demo";
 
 async function hashPin(pin: string): Promise<string> {
   return argon2.hash(pin, { type: argon2.argon2id });
 }
 
 async function seed() {
-  if (process.env.NODE_ENV === "production") {
+  const isDemo = SEED_MODE === "demo";
+  if (isDemo && process.env.NODE_ENV === "production") {
     throw new Error("SEED_DISABLED_IN_PRODUCTION");
+  }
+  if (!isDemo && process.env.FIAO_ALLOW_PROD_SEED !== "true") {
+    throw new Error("PROD_SEED_REQUIRES_FIAO_ALLOW_PROD_SEED=true");
   }
 
   const [ownerPinHash, cashierPinHash] = await Promise.all([hashPin(SEED_OWNER_PIN), hashPin(SEED_CASHIER_PIN)]);
@@ -27,37 +33,39 @@ async function seed() {
   await databaseClient.$transaction(async (tx) => {
     const ownerAccount = await tx.ownerAccount.upsert({
       where: { id: OWNER_ACCOUNT_ID },
-      update: { name: "Colmado Demo", active: true },
-      create: { id: OWNER_ACCOUNT_ID, name: "Colmado Demo" }
+      update: { name: SEED_OWNER_NAME, active: true },
+      create: { id: OWNER_ACCOUNT_ID, name: SEED_OWNER_NAME }
     });
 
-    // Limpieza idempotente del historial comercial del dueño demo
-    // (corridas E2E previas acumulan ventas/stock/saldo). Orden por FK Restrict.
-    await tx.syncChange.deleteMany({ where: { ownerId: ownerAccount.id } });
-    await tx.loyaltyMovement.deleteMany({ where: { ownerId: ownerAccount.id } });
-    await tx.loyaltyReward.deleteMany({ where: { ownerId: ownerAccount.id } });
-    await tx.loyaltyConfig.deleteMany({ where: { ownerId: ownerAccount.id } });
-    await tx.promotion.deleteMany({ where: { ownerId: ownerAccount.id } });
-    await tx.apartadoLine.deleteMany({ where: { ownerId: ownerAccount.id } });
-    await tx.creditMovement.deleteMany({ where: { ownerId: ownerAccount.id } });
-    await tx.sale.deleteMany({ where: { ownerId: ownerAccount.id } });
-    await tx.apartado.deleteMany({ where: { ownerId: ownerAccount.id } });
-    await tx.order.deleteMany({ where: { ownerId: ownerAccount.id } });
-    await tx.cashMovement.deleteMany({ where: { ownerId: ownerAccount.id } });
-    await tx.cashSession.deleteMany({ where: { ownerId: ownerAccount.id } });
-    await tx.purchaseLine.deleteMany({ where: { ownerId: ownerAccount.id } });
-    await tx.purchase.deleteMany({ where: { ownerId: ownerAccount.id } });
-    await tx.supplier.deleteMany({ where: { ownerId: ownerAccount.id } });
-    await tx.stockMovement.deleteMany({ where: { ownerId: ownerAccount.id } });
-    await tx.auditEvent.deleteMany({ where: { ownerId: ownerAccount.id } });
-    await tx.aiAuditLog.deleteMany({ where: { ownerId: ownerAccount.id } });
-    await tx.aiActionToken.deleteMany({ where: { ownerId: ownerAccount.id } });
-    await tx.businessSettings.deleteMany({ where: { ownerId: ownerAccount.id } });
-    await tx.onboardingState.deleteMany({ where: { ownerId: ownerAccount.id } });
-    await tx.clientOperation.deleteMany({ where: { ownerId: ownerAccount.id } });
-    await tx.customer.deleteMany({ where: { ownerId: ownerAccount.id } });
-    await tx.productStock.deleteMany({ where: { ownerId: ownerAccount.id } });
-    await tx.product.deleteMany({ where: { ownerId: ownerAccount.id } });
+    if (isDemo) {
+      // Limpieza idempotente del historial comercial del dueño demo
+      // (corridas E2E previas acumulan ventas/stock/saldo). Orden por FK Restrict.
+      await tx.syncChange.deleteMany({ where: { ownerId: ownerAccount.id } });
+      await tx.loyaltyMovement.deleteMany({ where: { ownerId: ownerAccount.id } });
+      await tx.loyaltyReward.deleteMany({ where: { ownerId: ownerAccount.id } });
+      await tx.loyaltyConfig.deleteMany({ where: { ownerId: ownerAccount.id } });
+      await tx.promotion.deleteMany({ where: { ownerId: ownerAccount.id } });
+      await tx.apartadoLine.deleteMany({ where: { ownerId: ownerAccount.id } });
+      await tx.creditMovement.deleteMany({ where: { ownerId: ownerAccount.id } });
+      await tx.sale.deleteMany({ where: { ownerId: ownerAccount.id } });
+      await tx.apartado.deleteMany({ where: { ownerId: ownerAccount.id } });
+      await tx.order.deleteMany({ where: { ownerId: ownerAccount.id } });
+      await tx.cashMovement.deleteMany({ where: { ownerId: ownerAccount.id } });
+      await tx.cashSession.deleteMany({ where: { ownerId: ownerAccount.id } });
+      await tx.purchaseLine.deleteMany({ where: { ownerId: ownerAccount.id } });
+      await tx.purchase.deleteMany({ where: { ownerId: ownerAccount.id } });
+      await tx.supplier.deleteMany({ where: { ownerId: ownerAccount.id } });
+      await tx.stockMovement.deleteMany({ where: { ownerId: ownerAccount.id } });
+      await tx.auditEvent.deleteMany({ where: { ownerId: ownerAccount.id } });
+      await tx.aiAuditLog.deleteMany({ where: { ownerId: ownerAccount.id } });
+      await tx.aiActionToken.deleteMany({ where: { ownerId: ownerAccount.id } });
+      await tx.businessSettings.deleteMany({ where: { ownerId: ownerAccount.id } });
+      await tx.onboardingState.deleteMany({ where: { ownerId: ownerAccount.id } });
+      await tx.clientOperation.deleteMany({ where: { ownerId: ownerAccount.id } });
+      await tx.customer.deleteMany({ where: { ownerId: ownerAccount.id } });
+      await tx.productStock.deleteMany({ where: { ownerId: ownerAccount.id } });
+      await tx.product.deleteMany({ where: { ownerId: ownerAccount.id } });
+    }
 
     await tx.branch.upsert({
       where: { id: BRANCH_LOS_MINA_ID },
@@ -72,14 +80,14 @@ async function seed() {
 
     await tx.user.upsert({
       where: { phoneE164: SEED_OWNER_PHONE },
-      update: { ownerId: ownerAccount.id, name: "Dueño Demo", pinHash: ownerPinHash, role: "OWNER", active: true },
-      create: { id: OWNER_USER_ID, ownerId: ownerAccount.id, name: "Dueño Demo", phoneE164: SEED_OWNER_PHONE, pinHash: ownerPinHash, role: "OWNER" }
+      update: { ownerId: ownerAccount.id, name: isDemo ? "Dueño Demo" : "Dueño", pinHash: ownerPinHash, role: "OWNER", active: true },
+      create: { id: OWNER_USER_ID, ownerId: ownerAccount.id, name: isDemo ? "Dueño Demo" : "Dueño", phoneE164: SEED_OWNER_PHONE, pinHash: ownerPinHash, role: "OWNER" }
     });
 
     const cashier = await tx.user.upsert({
       where: { phoneE164: SEED_CASHIER_PHONE },
-      update: { ownerId: ownerAccount.id, name: "Cajero Demo", pinHash: cashierPinHash, role: "CASHIER", active: true },
-      create: { id: CASHIER_USER_ID, ownerId: ownerAccount.id, name: "Cajero Demo", phoneE164: SEED_CASHIER_PHONE, pinHash: cashierPinHash, role: "CASHIER" }
+      update: { ownerId: ownerAccount.id, name: isDemo ? "Cajero Demo" : "Cajero", pinHash: cashierPinHash, role: "CASHIER", active: true },
+      create: { id: CASHIER_USER_ID, ownerId: ownerAccount.id, name: isDemo ? "Cajero Demo" : "Cajero", phoneE164: SEED_CASHIER_PHONE, pinHash: cashierPinHash, role: "CASHIER" }
     });
 
     // Cashier is assigned ONLY to Los Mina; Invivienda stays owner-only.
@@ -88,16 +96,20 @@ async function seed() {
       await tx.userBranch.create({ data: { userId: cashier.id, branchId: BRANCH_LOS_MINA_ID } });
     }
 
-    await seedCatalog(tx, ownerAccount.id, BRANCH_LOS_MINA_ID);
-    await seedCatalog(tx, ownerAccount.id, BRANCH_INVIVIENDA_ID);
-    await seedCustomers(tx, ownerAccount.id, BRANCH_LOS_MINA_ID);
-    await seedCustomers(tx, ownerAccount.id, BRANCH_INVIVIENDA_ID);
-    await seedLoyaltyAndPromotions(tx, ownerAccount.id, BRANCH_LOS_MINA_ID);
-    await seedSettings(tx, ownerAccount.id, BRANCH_LOS_MINA_ID);
-    await seedSettings(tx, ownerAccount.id, BRANCH_INVIVIENDA_ID);
+    if (isDemo) {
+      await seedCatalog(tx, ownerAccount.id, BRANCH_LOS_MINA_ID);
+      await seedCatalog(tx, ownerAccount.id, BRANCH_INVIVIENDA_ID);
+      await seedCustomers(tx, ownerAccount.id, BRANCH_LOS_MINA_ID);
+      await seedCustomers(tx, ownerAccount.id, BRANCH_INVIVIENDA_ID);
+      await seedLoyaltyAndPromotions(tx, ownerAccount.id, BRANCH_LOS_MINA_ID);
+    }
+    await seedSettings(tx, ownerAccount.id, BRANCH_LOS_MINA_ID, isDemo);
+    await seedSettings(tx, ownerAccount.id, BRANCH_INVIVIENDA_ID, isDemo);
   });
 
-  console.log("Seed complete: owner + cashier + 2 branches + catalog + customers + loyalty/promos.");
+  console.log(isDemo
+    ? "Seed complete (demo): owner + cashier + 2 branches + catalog + customers + loyalty/promos."
+    : "Seed complete (prod): owner + cashier + 2 branches + settings (sin datos ficticios).");
 }
 
 const DEMO_CATALOG = [
@@ -226,17 +238,19 @@ async function seedLoyaltyAndPromotions(
 async function seedSettings(
   tx: Parameters<Parameters<typeof databaseClient.$transaction>[0]>[0],
   ownerId: string,
-  branchId: string
+  branchId: string,
+  isDemo: boolean
 ) {
   await tx.businessSettings.upsert({
     where: { branchId },
     update: { ownerId, defaultPromiseDays: 7, lowStockThreshold: 3, cashierDiscountLimitCents: 1000, whatsappRemindersEnabled: false },
     create: { ownerId, branchId, defaultPromiseDays: 7, lowStockThreshold: 3, cashierDiscountLimitCents: 1000, whatsappRemindersEnabled: false }
   });
+  const milestones = isDemo ? ["BRANCH_CREATED", "CATALOG_LOADED", "CUSTOMER_CREATED"] : ["BRANCH_CREATED"];
   await tx.onboardingState.upsert({
     where: { branchId },
-    update: { ownerId, milestones: ["BRANCH_CREATED", "CATALOG_LOADED", "CUSTOMER_CREATED"] },
-    create: { ownerId, branchId, milestones: ["BRANCH_CREATED", "CATALOG_LOADED", "CUSTOMER_CREATED"] }
+    update: { ownerId, milestones },
+    create: { ownerId, branchId, milestones }
   });
 }
 

@@ -9,6 +9,8 @@ export interface LoginUserRecord {
     phoneE164: string;
     pinHash: string;
     role: Role;
+    failedLoginAttempts: number;
+    lockedUntil: Date | null;
   };
   owner: {
     id: string;
@@ -104,7 +106,9 @@ export class AuthRepository {
         name: user.name,
         phoneE164: user.phoneE164,
         pinHash: user.pinHash,
-        role: user.role as Role
+        role: user.role as Role,
+        failedLoginAttempts: user.failedLoginAttempts,
+        lockedUntil: user.lockedUntil
       },
       owner: {
         id: user.owner.id,
@@ -112,6 +116,20 @@ export class AuthRepository {
       },
       branches
     };
+  }
+
+  async updateLoginFailures(phoneE164: string, input: { failedLoginAttempts: number; lockedUntil: Date | null }): Promise<void> {
+    await this.db.user.updateMany({
+      where: { phoneE164 },
+      data: { failedLoginAttempts: input.failedLoginAttempts, lockedUntil: input.lockedUntil }
+    });
+  }
+
+  async clearLoginFailures(phoneE164: string): Promise<void> {
+    await this.db.user.updateMany({
+      where: { phoneE164 },
+      data: { failedLoginAttempts: 0, lockedUntil: null }
+    });
   }
 
   async findUserContext(userId: string, ownerId: string): Promise<UserContextRecord | null> {
